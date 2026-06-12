@@ -70,7 +70,7 @@ public class CostControlService {
         SessionStats session = sessionStats.computeIfAbsent(sessionId, key -> new SessionStats(today));
         session.resetIfNewDay(today);
         session.requestCount.incrementAndGet();
-        session.estimatedCost += estimatedCost;
+        session.addEstimatedCost(estimatedCost);
 
         String ip = clientIp == null ? "unknown" : clientIp;
         IpStats ipStat = ipStats.computeIfAbsent(ip, key -> new IpStats(today));
@@ -84,14 +84,14 @@ public class CostControlService {
         session.resetIfNewDay(today);
         int limit = properties.getCost().getMaxSessionRequestsPerDay();
         int count = session.requestCount.get();
-        return new SessionUsageDTO(sessionId, count, limit, session.estimatedCost, Math.max(0, limit - count));
+        return new SessionUsageDTO(sessionId, count, limit,session.getEstimatedCost(), Math.max(0, limit - count));
     }
 
     private static class SessionStats {
         private LocalDate date;
         private final AtomicInteger requestCount = new AtomicInteger(0);
         private volatile long lastRequestAt = 0;
-        private volatile double estimatedCost = 0.0;
+        private double estimatedCost = 0.0;
 
         private SessionStats(LocalDate date) {
             this.date = date;
@@ -104,6 +104,14 @@ public class CostControlService {
                 lastRequestAt = 0;
                 estimatedCost = 0.0;
             }
+        }
+
+        private synchronized void addEstimatedCost(double value) {
+            estimatedCost += value;
+        }
+
+        private synchronized double getEstimatedCost() {
+            return estimatedCost;
         }
     }
 

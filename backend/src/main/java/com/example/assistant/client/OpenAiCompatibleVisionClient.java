@@ -71,7 +71,7 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
             );
         } catch (RestClientResponseException e) {
             String responseBody = e.getResponseBodyAsString();
-            String detail = responseBody == null || responseBody.isBlank()
+            String detail = responseBody.isBlank()
                     ? e.getMessage()
                     : responseBody;
             throw new ModelCallException("调用多模态模型失败，HTTP " + e.getStatusCode() + "：" + detail, e);

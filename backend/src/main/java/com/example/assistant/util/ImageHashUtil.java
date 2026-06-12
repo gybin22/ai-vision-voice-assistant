@@ -9,12 +9,6 @@ import java.util.List;
 public final class ImageHashUtil {
     private ImageHashUtil() {}
 
-    public static String cacheKey(String sessionId, String question, byte[] imageBytes) {
-        String normalizedQuestion = normalizeQuestion(question);
-        String imageHash = sha256(imageBytes);
-        return sha256((sessionId + "|" + normalizedQuestion + "|" + imageHash).getBytes());
-    }
-
     public static String cacheKey(String sessionId, String question, List<VisionFrame> frames) {
         String normalizedQuestion = normalizeQuestion(question);
         StringBuilder builder = new StringBuilder(sessionId)
