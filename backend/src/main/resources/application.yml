@@ -7,7 +7,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 2MB
-      max-request-size: 3MB
+      max-request-size: 8MB
 
 management:
   endpoints:
@@ -26,6 +26,8 @@ assistant:
     timeout-ms: ${ASSISTANT_MODEL_TIMEOUT_MS:15000}
   cost:
     max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:819200}
+    max-frame-count: ${ASSISTANT_COST_MAX_FRAME_COUNT:8}
+    max-total-image-bytes: ${ASSISTANT_COST_MAX_TOTAL_IMAGE_BYTES:4194304}
     max-question-length: ${ASSISTANT_COST_MAX_QUESTION_LENGTH:500}
     max-output-tokens: ${ASSISTANT_COST_MAX_OUTPUT_TOKENS:500}
     min-session-interval-ms: ${ASSISTANT_COST_MIN_SESSION_INTERVAL_MS:10000}

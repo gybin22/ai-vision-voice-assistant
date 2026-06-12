@@ -20,7 +20,7 @@ public class CostControlService {
         this.properties = properties;
     }
 
-    public void validateRequest(String sessionId, String clientIp, String question, long imageBytes, int maxOutputTokens) {
+    public void validateRequest(String sessionId, String clientIp, String question, int frameCount, long totalImageBytes, int maxOutputTokens) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new CostLimitExceededException("SESSION_REQUIRED", "缺少 sessionId");
         }
@@ -30,8 +30,14 @@ public class CostControlService {
         if (question.length() > properties.getCost().getMaxQuestionLength()) {
             throw new CostLimitExceededException("QUESTION_TOO_LONG", "问题过长，请控制在 " + properties.getCost().getMaxQuestionLength() + " 字以内。");
         }
-        if (imageBytes > properties.getCost().getMaxImageBytes()) {
-            throw new CostLimitExceededException("IMAGE_TOO_LARGE", "图片过大，请降低摄像头截图分辨率后重试。");
+        if (frameCount <= 0) {
+            throw new CostLimitExceededException("IMAGE_REQUIRED", "至少需要上传 1 张关键帧。");
+        }
+        if (frameCount > properties.getCost().getMaxFrameCount()) {
+            throw new CostLimitExceededException("TOO_MANY_FRAMES", "关键帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");
+        }
+        if (totalImageBytes > properties.getCost().getMaxTotalImageBytes()) {
+            throw new CostLimitExceededException("IMAGE_SEQUENCE_TOO_LARGE", "关键帧总大小过大，请减少关键帧数量或降低截图质量。");
         }
         if (maxOutputTokens > properties.getCost().getMaxOutputTokens()) {
             throw new CostLimitExceededException("MAX_OUTPUT_TOO_LARGE", "输出长度超过系统限制。");
@@ -64,7 +70,7 @@ public class CostControlService {
         SessionStats session = sessionStats.computeIfAbsent(sessionId, key -> new SessionStats(today));
         session.resetIfNewDay(today);
         session.requestCount.incrementAndGet();
-        session.estimatedCost += estimatedCost;
+        session.addEstimatedCost(estimatedCost);
 
         String ip = clientIp == null ? "unknown" : clientIp;
         IpStats ipStat = ipStats.computeIfAbsent(ip, key -> new IpStats(today));
@@ -78,14 +84,14 @@ public class CostControlService {
         session.resetIfNewDay(today);
         int limit = properties.getCost().getMaxSessionRequestsPerDay();
         int count = session.requestCount.get();
-        return new SessionUsageDTO(sessionId, count, limit, session.estimatedCost, Math.max(0, limit - count));
+        return new SessionUsageDTO(sessionId, count, limit,session.getEstimatedCost(), Math.max(0, limit - count));
     }
 
     private static class SessionStats {
         private LocalDate date;
         private final AtomicInteger requestCount = new AtomicInteger(0);
         private volatile long lastRequestAt = 0;
-        private volatile double estimatedCost = 0.0;
+        private double estimatedCost = 0.0;
 
         private SessionStats(LocalDate date) {
             this.date = date;
@@ -98,6 +104,14 @@ public class CostControlService {
                 lastRequestAt = 0;
                 estimatedCost = 0.0;
             }
+        }
+
+        private synchronized void addEstimatedCost(double value) {
+            estimatedCost += value;
+        }
+
+        private synchronized double getEstimatedCost() {
+            return estimatedCost;
         }
     }
 

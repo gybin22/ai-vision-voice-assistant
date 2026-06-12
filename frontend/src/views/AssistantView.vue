@@ -36,18 +36,31 @@
             停止摄像头
           </button>
 
+          <button class="call-btn" :disabled="!stream" @click="saveKeyframeNow">
+            <span class="call-icon">📌</span>
+            保存当前关键帧
+          </button>
+
           <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="speech.stop">
             <span class="call-icon">🔇</span>
             停止播报
           </button>
         </div>
-        <!--
+
+        <KeyframePanel
+          :keyframes="keyframeRecorder.keyframes.value"
+          :is-running="keyframeRecorder.isRunning.value"
+          :status-text="keyframeRecorder.statusText.value"
+          :last-diff-score="keyframeRecorder.lastDiffScore.value"
+          :total-bytes="keyframeRecorder.totalBytes.value"
+        />
+
         <div class="stage-hints">
-          <span>发送问题时才会上传当前画面截图</span>
-          <span>图片最长边 768px</span>
-          <span>默认保留最近 3 轮上下文</span>
+          <span>画面变化明显才保存关键帧</span>
+          <span>提问时按时间顺序上传全部关键帧</span>
+          <span>默认每轮最多 8 张，控制成本</span>
         </div>
-        -->
+
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
         <div v-if="speechRecognition.error.value" class="notice notice-warning">{{ speechRecognition.error.value }}</div>
         <div v-if="!support.speechRecognition" class="notice notice-info">
@@ -83,12 +96,12 @@
             />
 
             <button class="send-button" :disabled="!canSend" @click="submit(lastInputType)">
-              {{ loading ? '请求中...' : '发送问题' }}
+              {{ loading ? '请求中...' : `发送 ${keyframeRecorder.frameCount.value || 1} 帧` }}
             </button>
           </div>
 
           <p class="composer-tip">
-            语音识别结果会自动填入输入框；点击发送后，系统会截取左侧视频当前帧。
+            前端会持续比较当前画面与上一帧。有人移动、手拿物体或镜头变化时会保存关键帧；发送问题时会把本轮全部关键帧发给后端，让模型理解动作变化过程。
           </p>
         </div>
       </aside>
@@ -97,13 +110,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CameraPreview from '@/components/CameraPreview.vue'
 import ChatMessages from '@/components/ChatMessages.vue'
 import CostStatusBar from '@/components/CostStatusBar.vue'
+import KeyframePanel from '@/components/KeyframePanel.vue'
 import QuestionInput from '@/components/QuestionInput.vue'
 import VoiceButton from '@/components/VoiceButton.vue'
-import { useFrameCapture } from '@/composables/useFrameCapture'
+import { useKeyframeRecorder } from '@/composables/useKeyframeRecorder'
 import { useMediaDevices } from '@/composables/useMediaDevices'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/composables/useSpeechSynthesis'
@@ -120,7 +134,17 @@ type CameraPreviewExpose = {
 const sessionId = getOrCreateSessionId()
 const support = getBrowserSupport()
 const media = useMediaDevices()
-const frameCapture = useFrameCapture()
+const keyframeRecorder = useKeyframeRecorder({
+  intervalMs: 850,
+  diffThreshold: 0.075,
+  changedRatioThreshold: 0.06,
+  minSaveIntervalMs: 1800,
+  maxFrames: 8,
+  maxLongSide: 768,
+  quality: 0.72,
+  mimeType: 'image/jpeg',
+  captureInitialFrame: true
+})
 const speechRecognition = useSpeechRecognition()
 const speech = useSpeechSynthesis()
 
@@ -131,7 +155,7 @@ const messages = ref<ChatMessage[]>([
   {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '请先启动摄像头和麦克风。你可以用文字或语音提问，我会结合当前摄像头画面回答。'
+    content: '请先启动摄像头和麦克风。系统会自动保存画面变化关键帧；你提问时，我会结合这些关键帧理解动作过程。'
   }
 ])
 const loading = ref(false)
@@ -157,25 +181,52 @@ watch(speechRecognition.transcript, value => {
   }
 })
 
+watch(stream, value => {
+  if (!value) {
+    keyframeRecorder.stop()
+    keyframeRecorder.clear({ resetBaseline: true })
+  }
+})
+
 onMounted(() => {
   refreshUsage()
 })
 
 onBeforeUnmount(() => {
   media.stop()
+  keyframeRecorder.stop()
+  keyframeRecorder.clear({ resetBaseline: true })
   speech.stop()
 })
 
 async function startCamera() {
   try {
     await media.start()
-  } catch {
-    // media.error 已经保存错误文本
+    const video = await waitForVideoReady()
+    await keyframeRecorder.start(video)
+  } catch (error) {
+    pushError(error instanceof Error ? error.message : '摄像头启动失败')
   }
 }
 
 function stopCamera() {
+  keyframeRecorder.stop()
+  keyframeRecorder.clear({ resetBaseline: true })
   media.stop()
+}
+
+async function saveKeyframeNow() {
+  const video = cameraRef.value?.getVideoElement()
+  if (!video || !cameraRef.value?.isReady()) {
+    pushError('摄像头画面尚未准备好，暂时不能保存关键帧。')
+    return
+  }
+
+  try {
+    await keyframeRecorder.forceSaveCurrent(video, '手动保存')
+  } catch (error) {
+    pushError(error instanceof Error ? error.message : '保存关键帧失败')
+  }
 }
 
 function onQuestionInput(value: string) {
@@ -204,32 +255,41 @@ async function submit(inputType: InputType = 'text') {
   messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
 
   try {
-    const captured = await frameCapture.capture(video, {
-      maxLongSide: 768,
-      quality: 0.72,
-      mimeType: 'image/jpeg'
-    })
+    // 发送前再检测一次。若本轮还没有任何关键帧，则保存当前帧作为动作序列基准。
+    await keyframeRecorder.forceCheck(video, { saveIfEmpty: true, reason: '发送前检测' })
+    const frames = keyframeRecorder.getFramesForUpload()
+
+    if (!frames.length) {
+      throw new Error('当前没有可上传的关键帧，请稍后再试。')
+    }
 
     const response = await askVision({
       sessionId,
       question: text,
-      image: captured.blob,
+      images: frames.map(frame => ({
+        blob: frame.blob,
+        width: frame.width,
+        height: frame.height,
+        capturedAt: frame.capturedAt,
+        diffScore: frame.diffScore,
+        sequence: frame.sequence
+      })),
       inputType,
       enableHistory: true,
-      maxOutputTokens: 500,
-      clientImageWidth: captured.width,
-      clientImageHeight: captured.height
+      maxOutputTokens: 500
     })
 
+    const totalKb = Math.round(response.usage.imageBytes / 1024)
     messages.value.push({
       id: crypto.randomUUID(),
       role: 'assistant',
       content: response.answer,
-      meta: `${response.model}${response.cached ? ' · 命中缓存' : ''} · ${response.latencyMs}ms · 图片 ${Math.round(response.usage.imageBytes / 1024)}KB`
+      meta: `${response.model}${response.cached ? ' · 命中缓存' : ''} · ${response.latencyMs}ms · 已发送 ${frames.length} 张关键帧 · ${totalKb}KB`
     })
 
     question.value = ''
     lastInputType.value = 'text'
+    keyframeRecorder.clear({ resetBaseline: true })
     speech.speak(response.answer)
     await refreshUsage()
   } catch (e) {
@@ -237,6 +297,25 @@ async function submit(inputType: InputType = 'text') {
   } finally {
     loading.value = false
   }
+}
+
+async function waitForVideoReady(timeoutMs = 4000): Promise<HTMLVideoElement> {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    await nextTick()
+    const video = cameraRef.value?.getVideoElement()
+    if (video && cameraRef.value?.isReady()) {
+      return video
+    }
+    await delay(120)
+  }
+
+  throw new Error('摄像头画面尚未准备好，请稍后再试。')
+}
+
+function delay(ms: number) {
+  return new Promise(resolve => window.setTimeout(resolve, ms))
 }
 
 function pushError(content: string) {
@@ -254,6 +333,7 @@ async function refreshUsage() {
 async function clearLocalConversation() {
   messages.value = []
   question.value = ''
+  keyframeRecorder.clear({ resetBaseline: true })
   try {
     await clearConversation(sessionId)
     await refreshUsage()

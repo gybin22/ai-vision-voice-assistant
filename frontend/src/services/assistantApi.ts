@@ -1,15 +1,22 @@
 import { request } from './apiClient'
 import type { InputType, SessionUsage, VisionChatResponse } from '@/types/chat'
 
+export interface AskVisionImage {
+  blob: Blob
+  width: number
+  height: number
+  capturedAt: number
+  diffScore: number
+  sequence: number
+}
+
 export interface AskVisionParams {
   sessionId: string
   question: string
-  image: Blob
+  images: AskVisionImage[]
   inputType: InputType
   enableHistory: boolean
   maxOutputTokens: number
-  clientImageWidth: number
-  clientImageHeight: number
 }
 
 export async function askVision(params: AskVisionParams): Promise<VisionChatResponse> {
@@ -19,9 +26,24 @@ export async function askVision(params: AskVisionParams): Promise<VisionChatResp
   formData.append('inputType', params.inputType)
   formData.append('enableHistory', String(params.enableHistory))
   formData.append('maxOutputTokens', String(params.maxOutputTokens))
-  formData.append('clientImageWidth', String(params.clientImageWidth))
-  formData.append('clientImageHeight', String(params.clientImageHeight))
-  formData.append('image', params.image, 'frame.jpg')
+  formData.append(
+    'frameMetadata',
+    JSON.stringify(
+      params.images.map(image => ({
+        sequence: image.sequence,
+        capturedAt: image.capturedAt,
+        width: image.width,
+        height: image.height,
+        diffScore: Number(image.diffScore.toFixed(4)),
+        size: image.blob.size
+      }))
+    )
+  )
+
+  params.images.forEach((image, index) => {
+    const sequence = String(image.sequence).padStart(3, '0')
+    formData.append('images', image.blob, `keyframe-${sequence}-${index + 1}.jpg`)
+  })
 
   return request<VisionChatResponse>('/chat/vision', {
     method: 'POST',
