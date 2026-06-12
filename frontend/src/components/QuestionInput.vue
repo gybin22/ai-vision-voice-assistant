@@ -7,7 +7,10 @@
       @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
       @keydown.ctrl.enter.prevent="$emit('submit')"
     />
-    <div class="meta">{{ modelValue.length }}/500，Ctrl + Enter 可发送</div>
+    <div class="input-footer">
+      <span>{{ modelValue.length }}/500</span>
+      <span>Ctrl + Enter 发送</span>
+    </div>
   </div>
 </template>
 
