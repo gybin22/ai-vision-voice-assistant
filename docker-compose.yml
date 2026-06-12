@@ -1,0 +1,9 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      ASSISTANT_MODEL_PROVIDER: mock
+      ASSISTANT_CORS_ALLOWED_ORIGINS: http://localhost:5173

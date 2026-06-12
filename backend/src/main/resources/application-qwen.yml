@@ -1,0 +1,18 @@
+
+assistant:
+  model:
+    provider: openai-compatible
+    base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    api-key: ${DASHSCOPE_API_KEY:${ASSISTANT_MODEL_API_KEY:}}
+    model-name: ${ASSISTANT_MODEL_MODEL_NAME:qwen3-vl-plus}
+    timeout-ms: ${ASSISTANT_MODEL_TIMEOUT_MS:30000}
+  cost:
+    # qwen3-vl-plus 支持图片输入。MVP 继续保守限制，避免视觉 token 和带宽成本失控。
+    max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:819200}
+    max-question-length: ${ASSISTANT_COST_MAX_QUESTION_LENGTH:500}
+    max-output-tokens: ${ASSISTANT_COST_MAX_OUTPUT_TOKENS:500}
+    min-session-interval-ms: ${ASSISTANT_COST_MIN_SESSION_INTERVAL_MS:10000}
+    max-session-requests-per-day: ${ASSISTANT_COST_MAX_SESSION_REQUESTS_PER_DAY:30}
+    max-ip-requests-per-day: ${ASSISTANT_COST_MAX_IP_REQUESTS_PER_DAY:100}
+    cache-ttl-seconds: ${ASSISTANT_COST_CACHE_TTL_SECONDS:600}
+    history-rounds: ${ASSISTANT_COST_HISTORY_ROUNDS:3}

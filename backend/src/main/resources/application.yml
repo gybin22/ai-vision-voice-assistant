@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ai-vision-voice-assistant-backend
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+assistant:
+  cors:
+    allowed-origins: ${ASSISTANT_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  model:
+    provider: ${ASSISTANT_MODEL_PROVIDER:mock}
+    base-url: ${ASSISTANT_MODEL_BASE_URL:https://api.openai.com/v1}
+    api-key: ${ASSISTANT_MODEL_API_KEY:}
+    model-name: ${ASSISTANT_MODEL_MODEL_NAME:gpt-4o-mini}
+    timeout-ms: ${ASSISTANT_MODEL_TIMEOUT_MS:15000}
+  cost:
+    max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:819200}
+    max-question-length: ${ASSISTANT_COST_MAX_QUESTION_LENGTH:500}
+    max-output-tokens: ${ASSISTANT_COST_MAX_OUTPUT_TOKENS:500}
+    min-session-interval-ms: ${ASSISTANT_COST_MIN_SESSION_INTERVAL_MS:10000}
+    max-session-requests-per-day: ${ASSISTANT_COST_MAX_SESSION_REQUESTS_PER_DAY:30}
+    max-ip-requests-per-day: ${ASSISTANT_COST_MAX_IP_REQUESTS_PER_DAY:100}
+    cache-ttl-seconds: ${ASSISTANT_COST_CACHE_TTL_SECONDS:600}
+    history-rounds: ${ASSISTANT_COST_HISTORY_ROUNDS:3}

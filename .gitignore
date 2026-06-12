@@ -1,0 +1,95 @@
+# =========================
+# Secrets / env files
+# =========================
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+!frontend/.env.*.example
+
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.*.example
+
+# =========================
+# Frontend: Vue / Vite / Node
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/.turbo/
+frontend/.cache/
+
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# =========================
+# Backend: Spring Boot / Maven
+# =========================
+backend/target/
+backend/logs/
+backend/*.log
+
+backend/uploads/
+backend/tmp/
+backend/temp/
+
+# =========================
+# Java build artifacts
+# =========================
+*.class
+*.war
+*.ear
+
+# 不忽略 maven-wrapper.jar，便于别人 clone 后直接运行 ./mvnw
+# 如果你明确不使用 Maven Wrapper，可以自行加 *.jar
+
+# =========================
+# IDE files
+# =========================
+.idea/
+*.iml
+*.iws
+*.ipr
+
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+.project
+.classpath
+.settings/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Test / coverage
+# =========================
+coverage/
+frontend/coverage/
+
+# =========================
+# Misc
+# =========================
+*.tmp
+*.temp
+*.swp
+*.swo
