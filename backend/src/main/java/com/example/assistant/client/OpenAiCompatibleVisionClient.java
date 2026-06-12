@@ -5,6 +5,7 @@ import com.example.assistant.exception.ModelCallException;
 import com.example.assistant.model.ChatMessage;
 import com.example.assistant.model.VisionChatCommand;
 import com.example.assistant.model.VisionChatResult;
+import com.example.assistant.model.VisionFrame;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -31,16 +32,18 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
             throw new ModelCallException("未配置模型 API Key。请设置 DASHSCOPE_API_KEY 或 ASSISTANT_MODEL_API_KEY。", null);
         }
 
+        if (command.frames() == null || command.frames().isEmpty()) {
+            throw new ModelCallException("没有可发送给模型的关键帧", null);
+        }
+
         String url = trimRightSlash(properties.getModel().getBaseUrl()) + "/chat/completions";
-        String base64Image = Base64.getEncoder().encodeToString(command.imageBytes());
-        String dataUrl = "data:" + command.imageMimeType() + ";base64," + base64Image;
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", properties.getModel().getModelName());
         body.put("max_tokens", command.maxOutputTokens());
         body.put("temperature", 0.2);
         body.put("stream", false);
-        body.put("messages", buildMessages(command, dataUrl));
+        body.put("messages", buildMessages(command));
 
         try {
             Map<?, ?> response = restClient.post()
@@ -80,7 +83,7 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         }
     }
 
-    private List<Map<String, Object>> buildMessages(VisionChatCommand command, String dataUrl) {
+    private List<Map<String, Object>> buildMessages(VisionChatCommand command) {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", command.systemPrompt()));
 
@@ -91,13 +94,44 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         }
 
         List<Map<String, Object>> userContent = new ArrayList<>();
-        userContent.add(Map.of("type", "text", "text", command.question()));
         userContent.add(Map.of(
-                "type", "image_url",
-                "image_url", Map.of("url", dataUrl)
+                "type", "text",
+                "text", buildUserText(command)
         ));
+
+        for (VisionFrame frame : command.frames()) {
+            userContent.add(Map.of(
+                    "type", "text",
+                    "text", "关键帧 #" + frame.sequence() + "，文件名：" + frame.filename()
+            ));
+            userContent.add(Map.of(
+                    "type", "image_url",
+                    "image_url", Map.of("url", toDataUrl(frame))
+            ));
+        }
+
         messages.add(Map.of("role", "user", "content", userContent));
         return messages;
+    }
+
+    private String buildUserText(VisionChatCommand command) {
+        StringBuilder text = new StringBuilder();
+        text.append("用户问题：").append(command.question()).append("\n\n")
+                .append("下面有 ").append(command.frames().size()).append(" 张关键帧，均来自同一个摄像头，按时间顺序排列。")
+                .append("请把它们当作一个短动作片段来理解，重点分析前后变化，而不是只看最后一张图。\n");
+
+        if (command.frameMetadataJson() != null && !command.frameMetadataJson().isBlank()) {
+            text.append("\n前端关键帧元数据 JSON：")
+                    .append(command.frameMetadataJson())
+                    .append("\n");
+        }
+
+        return text.toString();
+    }
+
+    private String toDataUrl(VisionFrame frame) {
+        String base64Image = Base64.getEncoder().encodeToString(frame.bytes());
+        return "data:" + frame.mimeType() + ";base64," + base64Image;
     }
 
     private String extractAnswer(Map<?, ?> response) {

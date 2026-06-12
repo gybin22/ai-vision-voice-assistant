@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api")
 public class ChatController {
@@ -38,24 +40,28 @@ public class ChatController {
     public VisionChatResponse visionChat(
             @RequestParam @NotBlank String sessionId,
             @RequestParam @NotBlank String question,
-            @RequestPart MultipartFile image,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images,
+            @RequestPart(value = "image", required = false) MultipartFile image,
             @RequestParam(defaultValue = "text") String inputType,
             @RequestParam(defaultValue = "true") boolean enableHistory,
             @RequestParam(defaultValue = "500") int maxOutputTokens,
             @RequestParam(required = false) Integer clientImageWidth,
             @RequestParam(required = false) Integer clientImageHeight,
+            @RequestParam(required = false) String frameMetadata,
             HttpServletRequest request
     ) {
         String clientIp = resolveClientIp(request);
         return visionChatService.chat(
                 sessionId,
                 question,
+                images,
                 image,
                 inputType,
                 enableHistory,
                 maxOutputTokens,
                 clientImageWidth,
                 clientImageHeight,
+                frameMetadata,
                 clientIp
         );
     }

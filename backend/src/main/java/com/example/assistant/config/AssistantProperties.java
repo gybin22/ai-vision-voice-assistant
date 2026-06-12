@@ -103,6 +103,10 @@ public class AssistantProperties {
         @Min(1024)
         private long maxImageBytes = 819200;
         @Min(1)
+        private int maxFrameCount = 8;
+        @Min(1024)
+        private long maxTotalImageBytes = 4194304;
+        @Min(1)
         private int maxQuestionLength = 500;
         @Min(1)
         private int maxOutputTokens = 500;
@@ -123,6 +127,22 @@ public class AssistantProperties {
 
         public void setMaxImageBytes(long maxImageBytes) {
             this.maxImageBytes = maxImageBytes;
+        }
+
+        public int getMaxFrameCount() {
+            return maxFrameCount;
+        }
+
+        public void setMaxFrameCount(int maxFrameCount) {
+            this.maxFrameCount = maxFrameCount;
+        }
+
+        public long getMaxTotalImageBytes() {
+            return maxTotalImageBytes;
+        }
+
+        public void setMaxTotalImageBytes(long maxTotalImageBytes) {
+            this.maxTotalImageBytes = maxTotalImageBytes;
         }
 
         public int getMaxQuestionLength() {
