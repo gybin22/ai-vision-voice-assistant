@@ -10,11 +10,20 @@
       @canplay="handleVideoReady"
     />
 
+    <div v-if="stream && !videoReady" class="video-overlay">
+      <div class="loader-dot"></div>
+      <span>正在准备摄像头画面...</span>
+    </div>
+
+    <div v-if="stream" class="video-label">
+      <span class="record-dot"></span>
+      Live
+    </div>
+
     <div v-else class="video-placeholder">
-      <div>
-        <strong>摄像头未启动</strong>
-        <p>点击“启动摄像头和麦克风”后，系统会在你提问时截取当前画面。</p>
-      </div>
+      <div class="placeholder-icon">📹</div>
+      <strong>摄像头未启动</strong>
+      <p>点击下方按钮开启摄像头和麦克风。提问时系统会截取当前画面。</p>
     </div>
   </div>
 </template>

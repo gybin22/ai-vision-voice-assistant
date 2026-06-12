@@ -3,11 +3,17 @@
     <div
       v-for="message in messages"
       :key="message.id"
-      class="message"
+      class="message-row"
       :class="message.role"
     >
-      <div>{{ message.content }}</div>
-      <div v-if="message.meta" class="meta">{{ message.meta }}</div>
+      <div class="avatar">
+        {{ message.role === 'user' ? '你' : message.role === 'assistant' ? 'AI' : '!' }}
+      </div>
+
+      <div class="message-bubble">
+        <div>{{ message.content }}</div>
+        <div v-if="message.meta" class="message-meta">{{ message.meta }}</div>
+      </div>
     </div>
   </div>
 </template>
