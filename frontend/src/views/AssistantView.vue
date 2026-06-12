@@ -1,40 +1,79 @@
 <template>
-  <main class="app-shell">
-    <header class="header">
-      <div>
-        <h1>AI 视觉语音对话助手</h1>
-        <p>提问时截取当前摄像头画面，后端调用多模态模型回答，前端语音播报。</p>
-      </div>
-      <CostStatusBar :session-id="sessionId" :usage="usage" />
-    </header>
-
-    <section class="grid">
-      <div class="card">
-        <div class="card-body">
-          <CameraPreview ref="cameraRef" :stream="stream" />
-
-          <div class="controls">
-            <button class="btn btn-primary" :disabled="isStarting || Boolean(stream)" @click="startCamera">
-              {{ isStarting ? '启动中...' : '启动摄像头和麦克风' }}
-            </button>
-            <button class="btn btn-ghost" :disabled="!stream" @click="stopCamera">停止摄像头</button>
-            <button class="btn btn-ghost" :disabled="!speech.isSpeaking.value" @click="speech.stop">停止播报</button>
-          </div>
-
-          <div v-if="mediaError" class="notice">{{ mediaError }}</div>
-          <div v-if="speechRecognition.error.value" class="notice">{{ speechRecognition.error.value }}</div>
-          <div v-if="!support.speechRecognition" class="notice">当前浏览器不支持语音识别，请使用文字输入。</div>
+  <main class="video-chat-page">
+    <header class="app-topbar">
+      <div class="brand">
+        <div class="brand-mark">AI</div>
+        <div>
+          <h1>AI 视觉语音对话助手</h1>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-body">
-          <QuestionInput :model-value="question" @update:model-value="onQuestionInput" @submit="submit(lastInputType)" />
+      <CostStatusBar :session-id="sessionId" :usage="usage" />
+    </header>
 
-          <div class="controls">
-            <button class="btn btn-primary" :disabled="!canSend" @click="submit(lastInputType)">
-              {{ loading ? '请求中...' : '发送问题' }}
-            </button>
+    <section class="video-chat-shell">
+      <section class="stage-card">
+        <div class="stage-header">
+          <div>
+            <span class="eyebrow">Live Camera</span>
+            <h2>实时画面</h2>
+          </div>
+          <span class="status-pill" :class="{ active: Boolean(stream) }">
+            {{ stream ? '摄像头已连接' : '等待连接' }}
+          </span>
+        </div>
+
+        <CameraPreview ref="cameraRef" :stream="stream" />
+
+        <div class="call-controls">
+          <button class="call-btn call-btn-primary" :disabled="isStarting || Boolean(stream)" @click="startCamera">
+            <span class="call-icon">📷</span>
+            {{ isStarting ? '启动中...' : '启动摄像头和麦克风' }}
+          </button>
+
+          <button class="call-btn" :disabled="!stream" @click="stopCamera">
+            <span class="call-icon">⏹</span>
+            停止摄像头
+          </button>
+
+          <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="speech.stop">
+            <span class="call-icon">🔇</span>
+            停止播报
+          </button>
+        </div>
+        <!--
+        <div class="stage-hints">
+          <span>发送问题时才会上传当前画面截图</span>
+          <span>图片最长边 768px</span>
+          <span>默认保留最近 3 轮上下文</span>
+        </div>
+        -->
+        <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
+        <div v-if="speechRecognition.error.value" class="notice notice-warning">{{ speechRecognition.error.value }}</div>
+        <div v-if="!support.speechRecognition" class="notice notice-info">
+          当前浏览器不支持语音识别，请使用文字输入。
+        </div>
+      </section>
+
+      <aside class="chat-card">
+        <div class="chat-header">
+          <div>
+            <span class="eyebrow">Conversation</span>
+            <h2>对话</h2>
+          </div>
+          <button class="link-button" :disabled="loading" @click="clearLocalConversation">清空</button>
+        </div>
+
+        <ChatMessages :messages="messages" />
+
+        <div class="composer-card">
+          <QuestionInput
+            :model-value="question"
+            @update:model-value="onQuestionInput"
+            @submit="submit(lastInputType)"
+          />
+
+          <div class="composer-actions">
             <VoiceButton
               :supported="speechRecognition.isSupported"
               :is-listening="speechRecognition.isListening.value"
@@ -42,18 +81,17 @@
               @start="speechRecognition.start"
               @stop="speechRecognition.stop"
             />
-            <button class="btn btn-ghost" :disabled="loading" @click="clearLocalConversation">清空本地对话</button>
+
+            <button class="send-button" :disabled="!canSend" @click="submit(lastInputType)">
+              {{ loading ? '请求中...' : '发送问题' }}
+            </button>
           </div>
 
-          <div class="meta">语音识别结果会自动填入输入框。发送时才会上传当前帧图片。</div>
+          <p class="composer-tip">
+            语音识别结果会自动填入输入框；点击发送后，系统会截取左侧视频当前帧。
+          </p>
         </div>
-      </div>
-    </section>
-
-    <section class="card" style="margin-top: 18px;">
-      <div class="card-body">
-        <ChatMessages :messages="messages" />
-      </div>
+      </aside>
     </section>
   </main>
 </template>
@@ -93,7 +131,7 @@ const messages = ref<ChatMessage[]>([
   {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '请先启动摄像头和麦克风，然后用文字或语音提问。MVP 会在你点击发送时上传当前画面截图。'
+    content: '请先启动摄像头和麦克风。你可以用文字或语音提问，我会结合当前摄像头画面回答。'
   }
 ])
 const loading = ref(false)
@@ -189,6 +227,7 @@ async function submit(inputType: InputType = 'text') {
       content: response.answer,
       meta: `${response.model}${response.cached ? ' · 命中缓存' : ''} · ${response.latencyMs}ms · 图片 ${Math.round(response.usage.imageBytes / 1024)}KB`
     })
+
     question.value = ''
     lastInputType.value = 'text'
     speech.speak(response.answer)

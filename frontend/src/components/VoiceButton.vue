@@ -1,10 +1,11 @@
 <template>
   <button
-    class="btn"
-    :class="isListening ? 'btn-danger' : 'btn-ghost'"
+    class="voice-button"
+    :class="{ listening: isListening }"
     :disabled="disabled || !supported"
     @click="toggle"
   >
+    <span>{{ isListening ? '●' : '🎙' }}</span>
     {{ label }}
   </button>
 </template>
@@ -24,8 +25,8 @@ const emit = defineEmits<{
 }>()
 
 const label = computed(() => {
-  if (!props.supported) return '不支持语音输入'
-  return props.isListening ? '停止语音输入' : '开始语音输入'
+  if (!props.supported) return '不支持语音'
+  return props.isListening ? '停止语音' : '语音提问'
 })
 
 function toggle() {
