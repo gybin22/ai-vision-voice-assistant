@@ -1,6 +1,5 @@
 import { computed, ref } from 'vue'
 import { canvasToBlob, calcTargetSize } from '@/utils/imageCompress'
-import type { QuestionMode } from '@/types/chat'
 
 export type RollingFrameRole = 'history' | 'current' | 'manual'
 
@@ -17,7 +16,6 @@ export interface RollingFrameItem {
 }
 
 export interface PreparedVisionUpload {
-  mode: QuestionMode
   frames: RollingFrameItem[]
   visualSummary: string
   dispose: () => void
@@ -159,7 +157,6 @@ export function useRollingFrameBuffer(options: RollingFrameBufferOptions = {}) {
     ].join('\n')
 
     return {
-      mode: 'rolling',
       frames: normalized,
       visualSummary,
       dispose: () => disposeFrames([currentFrame])

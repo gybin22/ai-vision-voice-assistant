@@ -1,5 +1,5 @@
 import { request } from './apiClient'
-import type { InputType, QuestionMode, SessionUsage, VisionChatResponse } from '@/types/chat'
+import type { SessionUsage, VisionChatResponse } from '@/types/chat'
 
 export interface AskVisionImage {
   blob: Blob
@@ -14,10 +14,8 @@ export interface AskVisionImage {
 export interface AskVisionParams {
   sessionId: string
   question: string
-  questionMode: QuestionMode
   visualSummary: string
   images: AskVisionImage[]
-  inputType: InputType
   enableHistory: boolean
   maxOutputTokens: number
 }
@@ -26,9 +24,7 @@ export async function askVision(params: AskVisionParams): Promise<VisionChatResp
   const formData = new FormData()
   formData.append('sessionId', params.sessionId)
   formData.append('question', params.question)
-  formData.append('questionMode', params.questionMode)
   formData.append('visualSummary', params.visualSummary)
-  formData.append('inputType', params.inputType)
   formData.append('enableHistory', String(params.enableHistory))
   formData.append('maxOutputTokens', String(params.maxOutputTokens))
 

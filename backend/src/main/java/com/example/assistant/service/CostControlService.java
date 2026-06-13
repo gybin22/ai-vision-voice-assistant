@@ -20,7 +20,7 @@ public class CostControlService {
         this.properties = properties;
     }
 
-    public void validateRequest(String sessionId, String clientIp, String question, String questionMode, int frameCount, long totalImageBytes, int maxOutputTokens) {
+    public void validateRequest(String sessionId, String clientIp, String question, int frameCount, long totalImageBytes, int maxOutputTokens) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new CostLimitExceededException("SESSION_REQUIRED", "缺少 sessionId");
         }

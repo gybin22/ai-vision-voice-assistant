@@ -6,7 +6,6 @@ public record VisionChatCommand(
         String requestId,
         String sessionId,
         String question,
-        String questionMode,
         String visualSummary,
         List<VisionFrame> frames,
         String frameMetadataJson,

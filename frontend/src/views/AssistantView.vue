@@ -224,7 +224,7 @@ function onQuestionInput(value: string) {
   lastInputType.value = 'text'
 }
 
-async function submit(inputType: InputType = 'text') {
+async function submit(_inputType: InputType = 'text') {
   const text = question.value.trim()
   if (!text) return
 
@@ -253,7 +253,6 @@ async function submit(inputType: InputType = 'text') {
     const response = await askVision({
       sessionId,
       question: text,
-      questionMode: preparedUpload.mode,
       visualSummary: preparedUpload.visualSummary,
       images: preparedUpload.frames.map(frame => ({
         blob: frame.blob,
@@ -264,7 +263,6 @@ async function submit(inputType: InputType = 'text') {
         sequence: frame.sequence,
         role: frame.role
       })),
-      inputType,
       enableHistory: true,
       maxOutputTokens: 500
     })

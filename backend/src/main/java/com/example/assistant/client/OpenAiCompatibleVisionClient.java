@@ -113,7 +113,6 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         int frameCount = command.frames() == null ? 0 : command.frames().size();
         return PromptBuilder.userPrompt(
                 command.question(),
-                command.questionMode(),
                 frameCount,
                 command.visualSummary(),
                 command.frameMetadataJson()

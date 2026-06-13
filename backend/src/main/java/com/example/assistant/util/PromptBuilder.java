@@ -41,7 +41,7 @@ public final class PromptBuilder {
         ).trim();
     }
 
-    public static String userPrompt(String question, String questionMode, int frameCount, String visualSummary, String frameMetadataJson) {
+    public static String userPrompt(String question, int frameCount, String visualSummary, String frameMetadataJson) {
         StringBuilder text = new StringBuilder();
         text.append("用户问题：\n")
                 .append(safe(question, ""))
@@ -78,9 +78,6 @@ public final class PromptBuilder {
         return text.toString();
     }
 
-    public static String visualContextPrompt(String question, int frameCount, String frameMetadataJson) {
-        return userPrompt(question, "rolling", frameCount, "", frameMetadataJson);
-    }
 
     private static String safe(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();

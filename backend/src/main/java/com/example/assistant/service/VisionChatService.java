@@ -52,8 +52,6 @@ public class VisionChatService {
             String question,
             List<MultipartFile> images,
             MultipartFile legacyImage,
-            String inputType,
-            String questionMode,
             String visualSummary,
             boolean enableHistory,
             int maxOutputTokens,
@@ -65,7 +63,6 @@ public class VisionChatService {
         Instant start = Instant.now();
         String requestId = "req_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         String normalizedQuestion = question == null ? "" : question.trim();
-        String normalizedQuestionMode = normalizeQuestionMode(questionMode);
         String normalizedVisualSummary = visualSummary == null ? "" : visualSummary.trim();
         int boundedMaxOutputTokens = Math.min(maxOutputTokens, properties.getCost().getMaxOutputTokens());
 
@@ -76,7 +73,6 @@ public class VisionChatService {
                 sessionId,
                 clientIp,
                 normalizedQuestion,
-                normalizedQuestionMode,
                 frames.size(),
                 totalImageBytes,
                 boundedMaxOutputTokens
@@ -89,7 +85,7 @@ public class VisionChatService {
             imagePreprocessService.validateImage(frame.bytes(), frame.mimeType(), clientImageWidth, clientImageHeight);
         }
 
-        String cacheKey = ImageHashUtil.cacheKey(sessionId, normalizedQuestion, normalizedQuestionMode, normalizedVisualSummary, frames);
+        String cacheKey = ImageHashUtil.cacheKey(sessionId, normalizedQuestion, normalizedVisualSummary, frames);
         CachedVisionAnswer cached = cacheService.get(cacheKey);
         if (cached != null) {
             long latency = Duration.between(start, Instant.now()).toMillis();
@@ -113,7 +109,6 @@ public class VisionChatService {
                 requestId,
                 sessionId,
                 normalizedQuestion,
-                normalizedQuestionMode,
                 normalizedVisualSummary,
                 frames,
                 frameMetadataJson == null ? "" : frameMetadataJson,
@@ -204,10 +199,17 @@ public class VisionChatService {
                 return result;
             }
             for (JsonNode node : root) {
-                int sequence = intValue(node, "sequence", result.size() + 1);
+                JsonNode sequenceNode = node.get("sequence");
+                int sequence = sequenceNode != null && sequenceNode.canConvertToInt()
+                        ? sequenceNode.asInt()
+                        : result.size() + 1;
+                JsonNode roleNode = node.get("role");
+                String role = roleNode == null || roleNode.isNull() || roleNode.asText().isBlank()
+                        ? frameRoleFallback(sequence, root.size())
+                        : roleNode.asText();
                 result.put(sequence, new FrameMeta(
                         sequence,
-                        textValue(node, "role", sequenceRole(sequence)),
+                        role,
                         longValueOrNull(node, "capturedAt"),
                         longValueOrNull(node, "offsetMs"),
                         intValueOrNull(node, "width"),
@@ -221,29 +223,11 @@ public class VisionChatService {
         return result;
     }
 
-    private String normalizeQuestionMode(String questionMode) {
-        if (questionMode == null || questionMode.isBlank()) {
-            return "rolling";
-        }
-        String normalized = questionMode.trim().toLowerCase(Locale.ROOT);
-        return "rolling".equals(normalized) ? "rolling" : "rolling";
+
+    private static String frameRoleFallback(int sequence, int totalFrames) {
+        return sequence == totalFrames ? "current" : "history";
     }
 
-    private static String sequenceRole(int sequence) {
-        return sequence <= 0 ? "history" : "history";
-    }
-
-    private static String textValue(JsonNode node, String field, String fallback) {
-        JsonNode value = node.get(field);
-        if (value == null || value.isNull()) return fallback;
-        String text = value.asText();
-        return text == null || text.isBlank() ? fallback : text;
-    }
-
-    private static int intValue(JsonNode node, String field, int fallback) {
-        JsonNode value = node.get(field);
-        return value != null && value.canConvertToInt() ? value.asInt() : fallback;
-    }
 
     private static Integer intValueOrNull(JsonNode node, String field) {
         JsonNode value = node.get(field);
@@ -265,7 +249,7 @@ public class VisionChatService {
             Long size
     ) {
         private static FrameMeta empty(int sequence) {
-            return new FrameMeta(sequence, sequenceRole(sequence), null, null, null, null, null);
+            return new FrameMeta(sequence, "history", null, null, null, null, null);
         }
     }
 }
