@@ -2,93 +2,67 @@
   <section class="keyframe-panel">
     <div class="keyframe-panel-header">
       <div>
-        <span class="eyebrow">Vision Events</span>
-        <h3>视觉事件缓冲区</h3>
+        <span class="eyebrow">Rolling Frame Buffer</span>
+        <h3>最近 15 秒视觉帧</h3>
       </div>
       <div class="keyframe-stats">
-        <span>{{ eventCount }} 事件</span>
-        <span>{{ frameCount }} 帧</span>
+        <span>{{ frameCount }}/{{ maxFrames }} 帧</span>
         <span>{{ totalKb }} KB</span>
+        <span>1 fps</span>
       </div>
     </div>
 
     <div class="keyframe-status">
       <span class="status-dot" :class="{ active: isRunning }"></span>
       <span>{{ statusText }}</span>
-      <span class="diff-score">差异 {{ diffPercent }}%</span>
+      <span class="diff-score">覆盖约 {{ coverageSeconds.toFixed(1) }}s</span>
     </div>
 
     <div class="upload-strategy">
-      <span>当前问题模式：{{ modeLabel }}</span>
-      <span>{{ uploadHint }}</span>
+      <span>固定策略：每次提问上传最近 {{ maxFrames }} 帧</span>
+      <span>最后一帧为发送瞬间当前帧</span>
     </div>
 
-    <div v-if="events.length" class="event-list">
-      <article v-for="event in events" :key="event.id" class="vision-event-card">
-        <div class="vision-event-header">
-          <span>事件 #{{ event.sequence }}</span>
-          <span>{{ event.status === 'open' ? '进行中' : '已结束' }}</span>
-          <span>{{ formatDuration(event.durationMs) }}</span>
-        </div>
-
-        <div class="keyframe-strip compact">
-          <article v-for="frame in event.frames" :key="frame.id" class="keyframe-thumb">
-            <img :src="frame.url" alt="视觉事件代表帧" />
-            <div class="keyframe-meta">
-              <span>{{ frameKindLabel(frame.kind) }}</span>
-              <span>{{ Math.round(frame.diffScore * 100) }}%</span>
-            </div>
-          </article>
+    <div v-if="frames.length" class="keyframe-strip rolling-frame-strip">
+      <article v-for="frame in frames" :key="frame.id" class="keyframe-thumb">
+        <img :src="frame.url" alt="最近视觉采样帧" />
+        <div class="keyframe-meta">
+          <span>#{{ frame.sequence }}</span>
+          <span>{{ frameRoleLabel(frame.role) }}</span>
         </div>
       </article>
     </div>
 
     <div v-else class="keyframe-empty">
-      系统会把连续画面变化合并成“视觉事件”。普通聊天不会上传图片；问当前画面时只传当前帧；问刚才发生了什么时才发送事件代表帧。
+      启动摄像头后，前端会每秒保存 1 张压缩帧，只在内存中保留最近 {{ maxFrames }} 张。发送问题时会补采一张当前帧，并把这些图片按时间顺序发给后端。
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { KeyframeKind, VisionEventItem } from '@/composables/useKeyframeRecorder'
-import type { QuestionMode } from '@/types/chat'
-import { questionModeLabel, questionModeUploadHint } from '@/utils/questionMode'
+import type { RollingFrameItem, RollingFrameRole } from '@/composables/useRollingFrameBuffer'
 
 const props = defineProps<{
-  events: VisionEventItem[]
+  frames: RollingFrameItem[]
   isRunning: boolean
   statusText: string
-  lastDiffScore: number
   totalBytes: number
-  questionMode: QuestionMode
+  coverageSeconds: number
+  maxFrames: number
 }>()
 
-const eventCount = computed(() => props.events.length)
-const frameCount = computed(() => props.events.reduce((sum, event) => sum + event.frames.length, 0))
+const frameCount = computed(() => props.frames.length)
 const totalKb = computed(() => Math.round(props.totalBytes / 1024))
-const diffPercent = computed(() => Math.round(props.lastDiffScore * 100))
-const modeLabel = computed(() => questionModeLabel(props.questionMode))
-const uploadHint = computed(() => questionModeUploadHint(props.questionMode))
 
-function formatDuration(durationMs: number) {
-  return `${(durationMs / 1000).toFixed(1)}s`
-}
-
-function frameKindLabel(kind: KeyframeKind) {
-  switch (kind) {
-    case 'start':
-      return '开始'
-    case 'peak':
-      return '峰值'
-    case 'end':
-      return '结束'
+function frameRoleLabel(role: RollingFrameRole) {
+  switch (role) {
     case 'current':
       return '当前'
     case 'manual':
       return '手动'
     default:
-      return '帧'
+      return '历史'
   }
 }
 </script>

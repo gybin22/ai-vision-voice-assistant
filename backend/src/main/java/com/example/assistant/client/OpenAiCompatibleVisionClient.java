@@ -96,7 +96,7 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
             for (VisionFrame frame : command.frames()) {
                 userContent.add(Map.of(
                         "type", "text",
-                        "text", "视觉帧 #" + frame.sequence() + "，文件名：" + frame.filename()
+                        "text", frameLabel(frame, command.frames().size())
                 ));
                 userContent.add(Map.of(
                         "type", "image_url",
@@ -113,11 +113,29 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         int frameCount = command.frames() == null ? 0 : command.frames().size();
         return PromptBuilder.userPrompt(
                 command.question(),
-                command.questionMode(),
                 frameCount,
                 command.visualSummary(),
                 command.frameMetadataJson()
         );
+    }
+
+
+    private String frameLabel(VisionFrame frame, int totalFrames) {
+        String role = frame.role() == null || frame.role().isBlank() ? "history" : frame.role();
+        String roleLabel = switch (role) {
+            case "current" -> "当前帧/最新";
+            case "manual" -> "手动补充帧";
+            default -> "历史帧";
+        };
+        String offset = frame.offsetMs() == null ? "未知" : frame.offsetMs() + "ms";
+        String size = frame.width() != null && frame.height() != null
+                ? frame.width() + "x" + frame.height()
+                : "未知尺寸";
+        return "帧 " + frame.sequence() + "/" + totalFrames
+                + "，" + roleLabel
+                + "，相对当前帧时间偏移 t=" + offset
+                + "，尺寸 " + size
+                + "。这些帧按时间顺序排列，最后一帧是用户发送问题时的当前画面。";
     }
 
     private String toDataUrl(VisionFrame frame) {

@@ -158,11 +158,11 @@ public class AssistantProperties {
 
     public static class Cost {
         @Min(1024)
-        private long maxImageBytes = 819200;
+        private long maxImageBytes = 524288;
         @Min(1)
-        private int maxFrameCount = 8;
+        private int maxFrameCount = 15;
         @Min(1024)
-        private long maxTotalImageBytes = 4194304;
+        private long maxTotalImageBytes = 3145728;
         @Min(1)
         private int maxQuestionLength = 500;
         @Min(1)
