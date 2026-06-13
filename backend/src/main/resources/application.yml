@@ -25,10 +25,11 @@ assistant:
     model-name: ${ASSISTANT_MODEL_MODEL_NAME:gpt-4o-mini}
     timeout-ms: ${ASSISTANT_MODEL_TIMEOUT_MS:15000}
   dialogue:
-    style: ${ASSISTANT_DIALOGUE_STYLE:natural}
-    max-sentences: ${ASSISTANT_DIALOGUE_MAX_SENTENCES:4}
-    allow-follow-up-question: ${ASSISTANT_DIALOGUE_ALLOW_FOLLOW_UP_QUESTION:true}
-    temperature: ${ASSISTANT_DIALOGUE_TEMPERATURE:0.55}
+    # calm-natural: 像普通视频通话一样回答。视觉只是上下文，不强行描述画面。
+    style: ${ASSISTANT_DIALOGUE_STYLE:calm-natural}
+    max-sentences: ${ASSISTANT_DIALOGUE_MAX_SENTENCES:2}
+    allow-follow-up-question: ${ASSISTANT_DIALOGUE_ALLOW_FOLLOW_UP_QUESTION:false}
+    temperature: ${ASSISTANT_DIALOGUE_TEMPERATURE:0.25}
   cost:
     max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:819200}
     max-frame-count: ${ASSISTANT_COST_MAX_FRAME_COUNT:8}
