@@ -109,13 +109,13 @@ public class AssistantProperties {
     }
 
     public static class Dialogue {
-        /** natural / precise / companion / exam */
+        /** calm-natural / precise / companion / exam */
         @NotBlank
-        private String style = "natural";
+        private String style = "calm-natural";
         @Min(1)
-        private int maxSentences = 4;
-        private boolean allowFollowUpQuestion = true;
-        private double temperature = 0.55;
+        private int maxSentences = 2;
+        private boolean allowFollowUpQuestion = false;
+        private double temperature = 0.25;
 
         public String getStyle() {
             return style;
