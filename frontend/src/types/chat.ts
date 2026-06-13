@@ -1,7 +1,7 @@
 export type InputType = 'text' | 'voice'
 
-//判断用户问题属于哪种类型
-export type QuestionMode = 'chat' | 'current' | 'motion' | 'detailed'
+// 当前不再做问题分类；所有提问统一携带最近 15 秒滚动视觉上下文。
+export type QuestionMode = 'rolling' | 'chat' | 'current' | 'motion' | 'detailed'
 
 export interface ChatMessage {
   id: string

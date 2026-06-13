@@ -36,7 +36,7 @@ public class ChatController {
             @RequestPart(value = "images", required = false) List<MultipartFile> images,
             @RequestPart(value = "image", required = false) MultipartFile image,
             @RequestParam(defaultValue = "text") String inputType,
-            @RequestParam(defaultValue = "chat") String questionMode,
+            @RequestParam(defaultValue = "rolling") String questionMode,
             @RequestParam(defaultValue = "") String visualSummary,
             @RequestParam(defaultValue = "true") boolean enableHistory,
             @RequestParam(defaultValue = "500") int maxOutputTokens,

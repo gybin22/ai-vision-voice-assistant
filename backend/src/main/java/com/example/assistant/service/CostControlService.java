@@ -30,15 +30,14 @@ public class CostControlService {
         if (question.length() > properties.getCost().getMaxQuestionLength()) {
             throw new CostLimitExceededException("QUESTION_TOO_LONG", "问题过长，请控制在 " + properties.getCost().getMaxQuestionLength() + " 字以内。");
         }
-        boolean visualRequired = questionMode != null && !questionMode.equalsIgnoreCase("chat");
-        if (visualRequired && frameCount <= 0) {
-            throw new CostLimitExceededException("IMAGE_REQUIRED", "这个问题需要视觉上下文，但没有收到图片。请先启动摄像头后再试。");
+        if (frameCount <= 0) {
+            throw new CostLimitExceededException("IMAGE_REQUIRED", "当前版本每次提问都需要上传最近 15 秒视觉上下文。请先启动摄像头后再试。");
         }
         if (frameCount > properties.getCost().getMaxFrameCount()) {
-            throw new CostLimitExceededException("TOO_MANY_FRAMES", "关键帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");
+            throw new CostLimitExceededException("TOO_MANY_FRAMES", "视觉帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");
         }
         if (totalImageBytes > properties.getCost().getMaxTotalImageBytes()) {
-            throw new CostLimitExceededException("IMAGE_SEQUENCE_TOO_LARGE", "关键帧总大小过大，请减少关键帧数量或降低截图质量。");
+            throw new CostLimitExceededException("IMAGE_SEQUENCE_TOO_LARGE", "视觉帧总大小过大，请降低截图质量后重试。");
         }
         if (maxOutputTokens > properties.getCost().getMaxOutputTokens()) {
             throw new CostLimitExceededException("MAX_OUTPUT_TOO_LARGE", "输出长度超过系统限制。");

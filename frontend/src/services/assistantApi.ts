@@ -6,11 +6,9 @@ export interface AskVisionImage {
   width: number
   height: number
   capturedAt: number
-  diffScore: number
-  changedRatio?: number
+  offsetMs: number
   sequence: number
-  eventSequence?: number
-  kind?: string
+  role: string
 }
 
 export interface AskVisionParams {
@@ -34,29 +32,25 @@ export async function askVision(params: AskVisionParams): Promise<VisionChatResp
   formData.append('enableHistory', String(params.enableHistory))
   formData.append('maxOutputTokens', String(params.maxOutputTokens))
 
-  if (params.images.length) {
-    formData.append(
-      'frameMetadata',
-      JSON.stringify(
-        params.images.map(image => ({
-          sequence: image.sequence,
-          eventSequence: image.eventSequence,
-          kind: image.kind,
-          capturedAt: image.capturedAt,
-          width: image.width,
-          height: image.height,
-          diffScore: Number(image.diffScore.toFixed(4)),
-          changedRatio: Number((image.changedRatio ?? 0).toFixed(4)),
-          size: image.blob.size
-        }))
-      )
+  formData.append(
+    'frameMetadata',
+    JSON.stringify(
+      params.images.map(image => ({
+        sequence: image.sequence,
+        role: image.role,
+        capturedAt: image.capturedAt,
+        offsetMs: image.offsetMs,
+        width: image.width,
+        height: image.height,
+        size: image.blob.size
+      }))
     )
-  }
+  )
 
-  params.images.forEach((image, index) => {
+  params.images.forEach(image => {
     const sequence = String(image.sequence).padStart(3, '0')
-    const kind = image.kind ?? 'frame'
-    formData.append('images', image.blob, `${params.questionMode}-${kind}-${sequence}-${index + 1}.jpg`)
+    const role = image.role || 'frame'
+    formData.append('images', image.blob, `rolling-${sequence}-${role}.jpg`)
   })
 
   return request<VisionChatResponse>('/chat/vision', {

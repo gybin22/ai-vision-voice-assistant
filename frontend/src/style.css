@@ -883,3 +883,18 @@ video {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Rolling 15s frame buffer */
+.rolling-frame-strip {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.rolling-frame-strip .keyframe-thumb {
+  aspect-ratio: 16 / 9;
+}
+
+@media (max-width: 720px) {
+  .rolling-frame-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

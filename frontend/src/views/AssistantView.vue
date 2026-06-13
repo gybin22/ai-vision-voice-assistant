@@ -36,9 +36,9 @@
             停止摄像头
           </button>
 
-          <button class="call-btn" :disabled="!stream" @click="saveKeyframeNow">
+          <button class="call-btn" :disabled="!stream" @click="saveFrameNow">
             <span class="call-icon">📌</span>
-            保存当前事件帧
+            立即采样一帧
           </button>
 
           <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="speech.stop">
@@ -48,12 +48,12 @@
         </div>
 
         <KeyframePanel
-          :events="keyframeRecorder.events.value"
-          :is-running="keyframeRecorder.isRunning.value"
-          :status-text="keyframeRecorder.statusText.value"
-          :last-diff-score="keyframeRecorder.lastDiffScore.value"
-          :total-bytes="keyframeRecorder.totalBytes.value"
-          :question-mode="activeQuestionMode"
+          :frames="rollingBuffer.frames.value"
+          :is-running="rollingBuffer.isRunning.value"
+          :status-text="rollingBuffer.statusText.value"
+          :total-bytes="rollingBuffer.totalBytes.value"
+          :coverage-seconds="rollingBuffer.coverageSeconds.value"
+          :max-frames="15"
         />
 
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
@@ -91,12 +91,12 @@
             />
 
             <button class="send-button" :disabled="!canSend" @click="submit(lastInputType)">
-              {{ loading ? thinkingText : `发送 · ${activeQuestionModeLabel}` }}
+              {{ loading ? thinkingText : '发送 · 最近 15 秒视觉上下文' }}
             </button>
           </div>
 
           <p class="composer-tip">
-            上传策略会按问题自动切换：普通聊天不发图，问当前画面只发当前帧，问刚才发生什么才发事件代表帧。
+            当前策略：不再做问题分类；每次提问都会上传最近 15 秒、约 1fps 的视觉抽帧，最后一帧是发送瞬间当前帧。模型自行判断是否结合图片回答。
           </p>
         </div>
       </aside>
@@ -112,14 +112,13 @@ import CostStatusBar from '@/components/CostStatusBar.vue'
 import KeyframePanel from '@/components/KeyframePanel.vue'
 import QuestionInput from '@/components/QuestionInput.vue'
 import VoiceButton from '@/components/VoiceButton.vue'
-import { useKeyframeRecorder, type PreparedVisionUpload } from '@/composables/useKeyframeRecorder'
+import { useRollingFrameBuffer, type PreparedVisionUpload } from '@/composables/useRollingFrameBuffer'
 import { useMediaDevices } from '@/composables/useMediaDevices'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/composables/useSpeechSynthesis'
 import { askVision, clearConversation, getSessionUsage } from '@/services/assistantApi'
-import type { ChatMessage, InputType, QuestionMode, SessionUsage } from '@/types/chat'
+import type { ChatMessage, InputType, SessionUsage } from '@/types/chat'
 import { getBrowserSupport } from '@/utils/browserSupport'
-import { classifyQuestionMode, questionModeLabel } from '@/utils/questionMode'
 import { getOrCreateSessionId } from '@/utils/session'
 
 type CameraPreviewExpose = {
@@ -130,16 +129,12 @@ type CameraPreviewExpose = {
 const sessionId = getOrCreateSessionId()
 const support = getBrowserSupport()
 const media = useMediaDevices()
-const keyframeRecorder = useKeyframeRecorder({
-  intervalMs: 850,
-  diffThreshold: 0.075,
-  changedRatioThreshold: 0.06,
-  minSaveIntervalMs: 1500,
-  eventQuietMs: 1400,
-  maxEvents: 5,
-  maxUploadFrames: 8,
-  maxLongSide: 768,
-  quality: 0.72,
+const rollingBuffer = useRollingFrameBuffer({
+  sampleIntervalMs: 1000,
+  maxStoredFrames: 15,
+  maxUploadFrames: 15,
+  maxLongSide: 640,
+  quality: 0.6,
   mimeType: 'image/jpeg'
 })
 const speechRecognition = useSpeechRecognition()
@@ -152,24 +147,20 @@ const messages = ref<ChatMessage[]>([
   {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '你可以直接像视频聊天一样问我。普通聊天我不会上传图片；你问画面或刚才的动作时，我再使用摄像头上下文。'
+    content: '你可以直接像视频聊天一样问我。摄像头开启后，我会在本地保存最近 15 秒的轻量视觉帧；你每次提问时，我会把这些帧按时间顺序发给模型，由模型自行判断是否需要结合画面。'
   }
 ])
 const loading = ref(false)
-const thinkingText = ref('我处理一下...')
+const thinkingText = ref('我看一下最近 15 秒...')
 const usage = ref<SessionUsage | null>(null)
 
 const stream = media.stream
 const isStarting = media.isStarting
 const mediaError = media.error
 
-const activeQuestionMode = computed<QuestionMode>(() => classifyQuestionMode(question.value))
-const activeQuestionModeLabel = computed(() => questionModeLabel(activeQuestionMode.value))
-
 const canSend = computed(() => {
   const text = question.value.trim()
   if (!text || loading.value) return false
-  if (activeQuestionMode.value === 'chat') return true
   return Boolean(stream.value && cameraRef.value?.isReady())
 })
 
@@ -182,8 +173,8 @@ watch(speechRecognition.transcript, value => {
 
 watch(stream, value => {
   if (!value) {
-    keyframeRecorder.stop()
-    keyframeRecorder.clear({ resetBaseline: true })
+    rollingBuffer.stop()
+    rollingBuffer.clear()
   }
 })
 
@@ -193,8 +184,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   media.stop()
-  keyframeRecorder.stop()
-  keyframeRecorder.clear({ resetBaseline: true })
+  rollingBuffer.stop()
+  rollingBuffer.clear()
   speech.stop()
 })
 
@@ -202,19 +193,19 @@ async function startCamera() {
   try {
     await media.start()
     const video = await waitForVideoReady()
-    await keyframeRecorder.start(video)
+    await rollingBuffer.start(video)
   } catch (error) {
     pushError(error instanceof Error ? error.message : '摄像头启动失败，可以检查一下浏览器权限。')
   }
 }
 
 function stopCamera() {
-  keyframeRecorder.stop()
-  keyframeRecorder.clear({ resetBaseline: true })
+  rollingBuffer.stop()
+  rollingBuffer.clear()
   media.stop()
 }
 
-async function saveKeyframeNow() {
+async function saveFrameNow() {
   const video = cameraRef.value?.getVideoElement()
   if (!video || !cameraRef.value?.isReady()) {
     pushError('摄像头画面还没准备好，稍等一下再试。')
@@ -222,9 +213,9 @@ async function saveKeyframeNow() {
   }
 
   try {
-    await keyframeRecorder.forceSaveCurrent(video, '手动保存')
+    await rollingBuffer.forceSaveCurrent(video)
   } catch (error) {
-    pushError(error instanceof Error ? error.message : '这次事件帧没保存成功，可以再试一次。')
+    pushError(error instanceof Error ? error.message : '这次采样没保存成功，可以再试一次。')
   }
 }
 
@@ -237,38 +228,27 @@ async function submit(inputType: InputType = 'text') {
   const text = question.value.trim()
   if (!text) return
 
-  const mode = classifyQuestionMode(text)
   let preparedUpload: PreparedVisionUpload | null = null
 
-  thinkingText.value = pickThinkingText(mode)
+  thinkingText.value = '我看一下最近 15 秒...'
   loading.value = true
   messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
 
   try {
-    if (mode === 'chat') {
-      preparedUpload = {
-        mode,
-        frames: [],
-        visualSummary: '本轮是普通聊天：没有上传图片，回答时不应主动提画面。',
-        eventCount: keyframeRecorder.eventCount.value,
-        dispose: () => {}
-      }
-    } else {
-      if (!stream.value) {
-        pushError('这个问题需要看摄像头画面，请先启动摄像头。')
-        return
-      }
-
-      const video = cameraRef.value?.getVideoElement()
-      const isVideoReady = cameraRef.value?.isReady() ?? false
-
-      if (!video || !isVideoReady) {
-        pushError('摄像头画面还没准备好，稍等一下再问我。')
-        return
-      }
-
-      preparedUpload = await keyframeRecorder.prepareUpload(video, mode)
+    if (!stream.value) {
+      pushError('请先启动摄像头。当前策略要求每次提问都上传最近 15 秒视觉上下文。')
+      return
     }
+
+    const video = cameraRef.value?.getVideoElement()
+    const isVideoReady = cameraRef.value?.isReady() ?? false
+
+    if (!video || !isVideoReady) {
+      pushError('摄像头画面还没准备好，稍等一下再问我。')
+      return
+    }
+
+    preparedUpload = await rollingBuffer.prepareUpload(video)
 
     const response = await askVision({
       sessionId,
@@ -280,11 +260,9 @@ async function submit(inputType: InputType = 'text') {
         width: frame.width,
         height: frame.height,
         capturedAt: frame.capturedAt,
-        diffScore: frame.diffScore,
-        changedRatio: frame.changedRatio,
+        offsetMs: frame.offsetMs,
         sequence: frame.sequence,
-        eventSequence: frame.eventSequence,
-        kind: frame.kind
+        role: frame.role
       })),
       inputType,
       enableHistory: true,
@@ -296,15 +274,11 @@ async function submit(inputType: InputType = 'text') {
       id: crypto.randomUUID(),
       role: 'assistant',
       content: response.answer,
-      meta: buildMeta(response.model, response.cached, response.latencyMs, preparedUpload.mode, preparedUpload.frames.length, totalKb)
+      meta: buildMeta(response.model, response.cached, response.latencyMs, preparedUpload.frames.length, totalKb)
     })
 
     question.value = ''
     lastInputType.value = 'text'
-
-    if (preparedUpload.mode === 'motion' || preparedUpload.mode === 'detailed') {
-      keyframeRecorder.clear({ resetBaseline: true })
-    }
 
     window.setTimeout(() => {
       speech.speak(response.answer)
@@ -333,20 +307,8 @@ async function waitForVideoReady(timeoutMs = 4000): Promise<HTMLVideoElement> {
   throw new Error('摄像头画面还没准备好，稍等一下再试。')
 }
 
-function pickThinkingText(mode: QuestionMode) {
-  const texts: Record<QuestionMode, string[]> = {
-    chat: ['我想一下...', '我处理一下...', '稍等一下...'],
-    current: ['我看一下当前画面...', '正在看当前帧...', '我确认一下...'],
-    motion: ['我在对比刚才的动作...', '正在整理最近的视觉事件...', '我看一下刚才发生了什么...'],
-    detailed: ['我会多看几帧再回答...', '正在做更完整的视觉分析...', '我仔细对比一下...']
-  }
-  const candidates = texts[mode]
-  return candidates[Math.floor(Math.random() * candidates.length)]
-}
-
-function buildMeta(model: string, cached: boolean, latencyMs: number, mode: QuestionMode, frameCount: number, totalKb: number) {
-  const uploadText = frameCount > 0 ? `已发送 ${frameCount} 张视觉帧 · ${totalKb}KB` : '未上传图片'
-  return `${model}${cached ? ' · 命中缓存' : ''} · ${latencyMs}ms · ${questionModeLabel(mode)} · ${uploadText}`
+function buildMeta(model: string, cached: boolean, latencyMs: number, frameCount: number, totalKb: number) {
+  return `${model}${cached ? ' · 命中缓存' : ''} · ${latencyMs}ms · 最近 15 秒视觉上下文 · 已发送 ${frameCount} 帧 · ${totalKb}KB`
 }
 
 function delay(ms: number) {
@@ -368,7 +330,7 @@ async function refreshUsage() {
 async function clearLocalConversation() {
   messages.value = []
   question.value = ''
-  keyframeRecorder.clear({ resetBaseline: true })
+  rollingBuffer.clear()
   try {
     await clearConversation(sessionId)
     await refreshUsage()

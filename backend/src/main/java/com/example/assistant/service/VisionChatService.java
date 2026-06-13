@@ -9,16 +9,15 @@ import com.example.assistant.exception.ModelCallException;
 import com.example.assistant.model.*;
 import com.example.assistant.util.ImageHashUtil;
 import com.example.assistant.util.PromptBuilder;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class VisionChatService {
@@ -28,6 +27,7 @@ public class VisionChatService {
     private final ConversationService conversationService;
     private final CacheService cacheService;
     private final AssistantProperties properties;
+    private final ObjectMapper objectMapper;
 
     public VisionChatService(
             MultimodalModelClient modelClient,
@@ -35,7 +35,8 @@ public class VisionChatService {
             ImagePreprocessService imagePreprocessService,
             ConversationService conversationService,
             CacheService cacheService,
-            AssistantProperties properties
+            AssistantProperties properties,
+            ObjectMapper objectMapper
     ) {
         this.modelClient = modelClient;
         this.costControlService = costControlService;
@@ -43,6 +44,7 @@ public class VisionChatService {
         this.conversationService = conversationService;
         this.cacheService = cacheService;
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     public VisionChatResponse chat(
@@ -67,7 +69,7 @@ public class VisionChatService {
         String normalizedVisualSummary = visualSummary == null ? "" : visualSummary.trim();
         int boundedMaxOutputTokens = Math.min(maxOutputTokens, properties.getCost().getMaxOutputTokens());
 
-        List<VisionFrame> frames = readFrames(images, legacyImage, normalizedQuestionMode);
+        List<VisionFrame> frames = readFrames(images, legacyImage, frameMetadataJson);
         long totalImageBytes = frames.stream().mapToLong(frame -> frame.bytes().length).sum();
 
         costControlService.validateRequest(
@@ -145,7 +147,7 @@ public class VisionChatService {
         );
     }
 
-    private List<VisionFrame> readFrames(List<MultipartFile> images, MultipartFile legacyImage, String questionMode) {
+    private List<VisionFrame> readFrames(List<MultipartFile> images, MultipartFile legacyImage, String frameMetadataJson) {
         List<MultipartFile> source = new ArrayList<>();
         if (images != null) {
             source.addAll(images.stream().filter(file -> file != null && !file.isEmpty()).toList());
@@ -155,38 +157,115 @@ public class VisionChatService {
         }
 
         if (source.isEmpty()) {
-            if ("chat".equalsIgnoreCase(questionMode)) {
-                return List.of();
-            }
-            throw new IllegalArgumentException("缺少图片文件");
+            throw new IllegalArgumentException("缺少视觉帧。当前版本每次提问都需要上传最近 15 秒视觉上下文。");
         }
 
         if (source.size() > properties.getCost().getMaxFrameCount()) {
             throw new IllegalArgumentException("视觉帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");
         }
 
+        Map<Integer, FrameMeta> metadataBySequence = parseFrameMetadata(frameMetadataJson);
         List<VisionFrame> frames = new ArrayList<>();
         for (int i = 0; i < source.size(); i += 1) {
             MultipartFile file = source.get(i);
+            int sequence = i + 1;
+            FrameMeta meta = metadataBySequence.getOrDefault(sequence, FrameMeta.empty(sequence));
             String mimeType = file.getContentType() == null ? "image/jpeg" : file.getContentType();
-            String filename = file.getOriginalFilename() == null ? "vision-frame-" + (i + 1) + ".jpg" : file.getOriginalFilename();
+            String filename = file.getOriginalFilename() == null ? "rolling-frame-" + sequence + ".jpg" : file.getOriginalFilename();
             try {
-                frames.add(new VisionFrame(i + 1, filename, file.getBytes(), mimeType));
+                frames.add(new VisionFrame(
+                        sequence,
+                        filename,
+                        file.getBytes(),
+                        mimeType,
+                        meta.role(),
+                        meta.capturedAt(),
+                        meta.offsetMs(),
+                        meta.width(),
+                        meta.height(),
+                        meta.size()
+                ));
             } catch (IOException e) {
-                throw new IllegalArgumentException("读取第 " + (i + 1) + " 张视觉帧失败", e);
+                throw new IllegalArgumentException("读取第 " + sequence + " 张视觉帧失败", e);
             }
         }
         return frames;
     }
 
+    private Map<Integer, FrameMeta> parseFrameMetadata(String frameMetadataJson) {
+        Map<Integer, FrameMeta> result = new HashMap<>();
+        if (frameMetadataJson == null || frameMetadataJson.isBlank()) {
+            return result;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(frameMetadataJson);
+            if (!root.isArray()) {
+                return result;
+            }
+            for (JsonNode node : root) {
+                int sequence = intValue(node, "sequence", result.size() + 1);
+                result.put(sequence, new FrameMeta(
+                        sequence,
+                        textValue(node, "role", sequenceRole(sequence)),
+                        longValueOrNull(node, "capturedAt"),
+                        longValueOrNull(node, "offsetMs"),
+                        intValueOrNull(node, "width"),
+                        intValueOrNull(node, "height"),
+                        longValueOrNull(node, "size")
+                ));
+            }
+        } catch (Exception ignored) {
+            // metadata 只用于 prompt 辅助；解析失败时仍按 multipart 顺序处理图片。
+        }
+        return result;
+    }
+
     private String normalizeQuestionMode(String questionMode) {
         if (questionMode == null || questionMode.isBlank()) {
-            return "chat";
+            return "rolling";
         }
         String normalized = questionMode.trim().toLowerCase(Locale.ROOT);
-        return switch (normalized) {
-            case "current", "motion", "detailed" -> normalized;
-            default -> "chat";
-        };
+        return "rolling".equals(normalized) ? "rolling" : "rolling";
+    }
+
+    private static String sequenceRole(int sequence) {
+        return sequence <= 0 ? "history" : "history";
+    }
+
+    private static String textValue(JsonNode node, String field, String fallback) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) return fallback;
+        String text = value.asText();
+        return text == null || text.isBlank() ? fallback : text;
+    }
+
+    private static int intValue(JsonNode node, String field, int fallback) {
+        JsonNode value = node.get(field);
+        return value != null && value.canConvertToInt() ? value.asInt() : fallback;
+    }
+
+    private static Integer intValueOrNull(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value != null && value.canConvertToInt() ? value.asInt() : null;
+    }
+
+    private static Long longValueOrNull(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value != null && value.canConvertToLong() ? value.asLong() : null;
+    }
+
+    private record FrameMeta(
+            int sequence,
+            String role,
+            Long capturedAt,
+            Long offsetMs,
+            Integer width,
+            Integer height,
+            Long size
+    ) {
+        private static FrameMeta empty(int sequence) {
+            return new FrameMeta(sequence, sequenceRole(sequence), null, null, null, null, null);
+        }
     }
 }
