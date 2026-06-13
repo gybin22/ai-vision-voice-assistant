@@ -7,14 +7,7 @@ import com.example.assistant.service.CostControlService;
 import com.example.assistant.service.VisionChatService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -43,6 +36,8 @@ public class ChatController {
             @RequestPart(value = "images", required = false) List<MultipartFile> images,
             @RequestPart(value = "image", required = false) MultipartFile image,
             @RequestParam(defaultValue = "text") String inputType,
+            @RequestParam(defaultValue = "chat") String questionMode,
+            @RequestParam(defaultValue = "") String visualSummary,
             @RequestParam(defaultValue = "true") boolean enableHistory,
             @RequestParam(defaultValue = "500") int maxOutputTokens,
             @RequestParam(required = false) Integer clientImageWidth,
@@ -57,6 +52,8 @@ public class ChatController {
                 images,
                 image,
                 inputType,
+                questionMode,
+                visualSummary,
                 enableHistory,
                 maxOutputTokens,
                 clientImageWidth,

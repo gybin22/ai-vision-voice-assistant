@@ -11,11 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
     private final RestClient restClient;
@@ -31,10 +27,6 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         String apiKey = properties.getModel().getApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new ModelCallException("未配置模型 API Key。请设置 DASHSCOPE_API_KEY 或 ASSISTANT_MODEL_API_KEY。", null);
-        }
-
-        if (command.frames() == null || command.frames().isEmpty()) {
-            throw new ModelCallException("没有可发送给模型的关键帧", null);
         }
 
         String url = trimRightSlash(properties.getModel().getBaseUrl()) + "/chat/completions";
@@ -100,15 +92,17 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
                 "text", buildUserText(command)
         ));
 
-        for (VisionFrame frame : command.frames()) {
-            userContent.add(Map.of(
-                    "type", "text",
-                    "text", "关键帧 #" + frame.sequence() + "，文件名：" + frame.filename()
-            ));
-            userContent.add(Map.of(
-                    "type", "image_url",
-                    "image_url", Map.of("url", toDataUrl(frame))
-            ));
+        if (command.frames() != null) {
+            for (VisionFrame frame : command.frames()) {
+                userContent.add(Map.of(
+                        "type", "text",
+                        "text", "视觉帧 #" + frame.sequence() + "，文件名：" + frame.filename()
+                ));
+                userContent.add(Map.of(
+                        "type", "image_url",
+                        "image_url", Map.of("url", toDataUrl(frame))
+                ));
+            }
         }
 
         messages.add(Map.of("role", "user", "content", userContent));
@@ -116,9 +110,12 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
     }
 
     private String buildUserText(VisionChatCommand command) {
-        return PromptBuilder.visualContextPrompt(
+        int frameCount = command.frames() == null ? 0 : command.frames().size();
+        return PromptBuilder.userPrompt(
                 command.question(),
-                command.frames().size(),
+                command.questionMode(),
+                frameCount,
+                command.visualSummary(),
                 command.frameMetadataJson()
         );
     }

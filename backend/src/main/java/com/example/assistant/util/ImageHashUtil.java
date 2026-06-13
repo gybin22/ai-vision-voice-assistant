@@ -9,11 +9,17 @@ import java.util.List;
 public final class ImageHashUtil {
     private ImageHashUtil() {}
 
-    public static String cacheKey(String sessionId, String question, List<VisionFrame> frames) {
-        String normalizedQuestion = normalizeQuestion(question);
+    public static String cacheKey(String sessionId, String question, String questionMode, String visualSummary, List<VisionFrame> frames) {
+        String normalizedQuestion = normalizeText(question);
+        String normalizedMode = normalizeText(questionMode);
+        String normalizedSummary = normalizeText(visualSummary);
         StringBuilder builder = new StringBuilder(sessionId)
                 .append('|')
                 .append(normalizedQuestion)
+                .append('|')
+                .append(normalizedMode)
+                .append('|')
+                .append(normalizedSummary)
                 .append('|')
                 .append(frames.size());
 
@@ -37,7 +43,7 @@ public final class ImageHashUtil {
         }
     }
 
-    private static String normalizeQuestion(String question) {
-        return question == null ? "" : question.trim().replaceAll("\\s+", " ").toLowerCase();
+    private static String normalizeText(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase();
     }
 }

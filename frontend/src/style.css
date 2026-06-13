@@ -826,3 +826,60 @@ video {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.upload-strategy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.upload-strategy span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: #075985;
+  background: #f3faff;
+  border: 1px solid var(--baby-blue-200);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vision-event-card {
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(248, 252, 255, 0.92);
+  border: 1px solid rgba(191, 231, 255, 0.72);
+}
+
+.vision-event-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #557086;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.keyframe-strip.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .vision-event-header {
+    flex-direction: column;
+  }
+
+  .keyframe-strip.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
