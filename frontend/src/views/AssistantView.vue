@@ -48,23 +48,23 @@
         </div>
 
         <KeyframePanel
-          :keyframes="keyframeRecorder.keyframes.value"
-          :is-running="keyframeRecorder.isRunning.value"
-          :status-text="keyframeRecorder.statusText.value"
-          :last-diff-score="keyframeRecorder.lastDiffScore.value"
-          :total-bytes="keyframeRecorder.totalBytes.value"
+            :keyframes="keyframeRecorder.keyframes.value"
+            :is-running="keyframeRecorder.isRunning.value"
+            :status-text="keyframeRecorder.statusText.value"
+            :last-diff-score="keyframeRecorder.lastDiffScore.value"
+            :total-bytes="keyframeRecorder.totalBytes.value"
         />
-
+        <!--
         <div class="stage-hints">
           <span>画面变化明显才保存关键帧</span>
           <span>提问时按时间顺序上传全部关键帧</span>
           <span>默认每轮最多 8 张，控制成本</span>
         </div>
-
+        -->
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
         <div v-if="speechRecognition.error.value" class="notice notice-warning">{{ speechRecognition.error.value }}</div>
         <div v-if="!support.speechRecognition" class="notice notice-info">
-          当前浏览器不支持语音识别，请使用文字输入。
+          这个浏览器暂时不能语音识别，你可以直接打字问我。
         </div>
       </section>
 
@@ -81,27 +81,27 @@
 
         <div class="composer-card">
           <QuestionInput
-            :model-value="question"
-            @update:model-value="onQuestionInput"
-            @submit="submit(lastInputType)"
+              :model-value="question"
+              @update:model-value="onQuestionInput"
+              @submit="submit(lastInputType)"
           />
 
           <div class="composer-actions">
             <VoiceButton
-              :supported="speechRecognition.isSupported"
-              :is-listening="speechRecognition.isListening.value"
-              :disabled="loading"
-              @start="speechRecognition.start"
-              @stop="speechRecognition.stop"
+                :supported="speechRecognition.isSupported"
+                :is-listening="speechRecognition.isListening.value"
+                :disabled="loading"
+                @start="speechRecognition.start"
+                @stop="speechRecognition.stop"
             />
 
             <button class="send-button" :disabled="!canSend" @click="submit(lastInputType)">
-              {{ loading ? '请求中...' : `发送 ${keyframeRecorder.frameCount.value || 1} 帧` }}
+              {{ loading ? thinkingText : `发送 ${keyframeRecorder.frameCount.value || 1} 帧` }}
             </button>
           </div>
 
           <p class="composer-tip">
-            前端会持续比较当前画面与上一帧。有人移动、手拿物体或镜头变化时会保存关键帧；发送问题时会把本轮全部关键帧发给后端，让模型理解动作变化过程。
+            我会在你对话时自动记住明显变化的关键帧。你提问时，我会结合这段动作过程来回答，而不是只看最后一张图。
           </p>
         </div>
       </aside>
@@ -155,19 +155,28 @@ const messages = ref<ChatMessage[]>([
   {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '请先启动摄像头和麦克风。系统会自动保存画面变化关键帧；你提问时，我会结合这些关键帧理解动作过程。'
+    content: '先打开摄像头和麦克风吧。你可以像视频聊天一样问我，我会结合刚才捕捉到的关键帧来理解动作变化。'
   }
 ])
 const loading = ref(false)
+const thinkingText = ref('我看一下...')
 const usage = ref<SessionUsage | null>(null)
 
 const stream = media.stream
 const isStarting = media.isStarting
 const mediaError = media.error
 
+const thinkingTexts = [
+  '我看一下...',
+  '让我观察一下刚才的动作...',
+  '稍等，我正在理解画面...',
+  '我在对比这几张关键帧...',
+  '我先看看发生了什么...'
+]
+
 const canSend = computed(() => {
   return Boolean(
-    question.value.trim() &&
+      question.value.trim() &&
       stream.value &&
       cameraRef.value?.isReady() &&
       !loading.value
@@ -205,7 +214,7 @@ async function startCamera() {
     const video = await waitForVideoReady()
     await keyframeRecorder.start(video)
   } catch (error) {
-    pushError(error instanceof Error ? error.message : '摄像头启动失败')
+    pushError(error instanceof Error ? error.message : '摄像头启动失败，可以检查一下浏览器权限。')
   }
 }
 
@@ -218,14 +227,14 @@ function stopCamera() {
 async function saveKeyframeNow() {
   const video = cameraRef.value?.getVideoElement()
   if (!video || !cameraRef.value?.isReady()) {
-    pushError('摄像头画面尚未准备好，暂时不能保存关键帧。')
+    pushError('我还没拿到清晰的摄像头画面，稍等一下再试。')
     return
   }
 
   try {
     await keyframeRecorder.forceSaveCurrent(video, '手动保存')
   } catch (error) {
-    pushError(error instanceof Error ? error.message : '保存关键帧失败')
+    pushError(error instanceof Error ? error.message : '这次关键帧没保存成功，可以再试一次。')
   }
 }
 
@@ -239,7 +248,7 @@ async function submit(inputType: InputType = 'text') {
   if (!text) return
 
   if (!stream.value) {
-    pushError('请先启动摄像头和麦克风。')
+    pushError('先启动摄像头和麦克风，我才能看到你这边的画面。')
     return
   }
 
@@ -247,10 +256,11 @@ async function submit(inputType: InputType = 'text') {
   const isVideoReady = cameraRef.value?.isReady() ?? false
 
   if (!video || !isVideoReady) {
-    pushError('摄像头画面尚未准备好，请等待 1 秒后再发送。')
+    pushError('摄像头画面还没准备好，稍等一下再问我。')
     return
   }
 
+  thinkingText.value = pickThinkingText()
   loading.value = true
   messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
 
@@ -260,7 +270,8 @@ async function submit(inputType: InputType = 'text') {
     const frames = keyframeRecorder.getFramesForUpload()
 
     if (!frames.length) {
-      throw new Error('当前没有可上传的关键帧，请稍后再试。')
+      pushError('我还没捕捉到明显变化。你可以稍微动一下，或者直接问当前画面。')
+      return
     }
 
     const response = await askVision({
@@ -290,10 +301,12 @@ async function submit(inputType: InputType = 'text') {
     question.value = ''
     lastInputType.value = 'text'
     keyframeRecorder.clear({ resetBaseline: true })
-    speech.speak(response.answer)
+    window.setTimeout(() => {
+      speech.speak(response.answer)
+    }, 220)
     await refreshUsage()
   } catch (e) {
-    pushError(e instanceof Error ? e.message : '请求失败')
+    pushError(e instanceof Error ? e.message : '我这边刚才没处理成功，可以再问一次。')
   } finally {
     loading.value = false
   }
@@ -311,7 +324,11 @@ async function waitForVideoReady(timeoutMs = 4000): Promise<HTMLVideoElement> {
     await delay(120)
   }
 
-  throw new Error('摄像头画面尚未准备好，请稍后再试。')
+  throw new Error('摄像头画面还没准备好，稍等一下再试。')
+}
+
+function pickThinkingText() {
+  return thinkingTexts[Math.floor(Math.random() * thinkingTexts.length)]
 }
 
 function delay(ms: number) {

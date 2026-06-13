@@ -11,9 +11,8 @@ public class MockVisionClient implements MultimodalModelClient {
                 ? 0
                 : command.frames().stream().mapToLong(frame -> frame.bytes().length).sum();
 
-        String answer = "这是 Mock 模型回答：我已收到你的问题“" + command.question() + "”，"
-                + "并收到了按时间顺序排列的 " + frameCount + " 张动作关键帧。"
-                + "接入真实多模态模型后，这里会结合这些关键帧分析画面中的动作变化。";
+        String answer = "我已经收到你的问题了，也拿到了这段动作里的 " + frameCount
+                + " 张关键帧。现在还是 Mock 模式，所以我不能真正看懂画面；接入真实多模态模型后，这里会结合这些关键帧分析画面中的动作变化。";
         int estimatedInputTokens = Math.max(50, command.question().length() / 2 + (int) (totalImageBytes / 300));
         int outputTokens = Math.max(20, answer.length() / 2);
         return new VisionChatResult(answer, "mock-vision-model", estimatedInputTokens, outputTokens, 0.0);

@@ -24,6 +24,11 @@ assistant:
     api-key: ${ASSISTANT_MODEL_API_KEY:}
     model-name: ${ASSISTANT_MODEL_MODEL_NAME:gpt-4o-mini}
     timeout-ms: ${ASSISTANT_MODEL_TIMEOUT_MS:15000}
+  dialogue:
+    style: ${ASSISTANT_DIALOGUE_STYLE:natural}
+    max-sentences: ${ASSISTANT_DIALOGUE_MAX_SENTENCES:4}
+    allow-follow-up-question: ${ASSISTANT_DIALOGUE_ALLOW_FOLLOW_UP_QUESTION:true}
+    temperature: ${ASSISTANT_DIALOGUE_TEMPERATURE:0.55}
   cost:
     max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:819200}
     max-frame-count: ${ASSISTANT_COST_MAX_FRAME_COUNT:8}
