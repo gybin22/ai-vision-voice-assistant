@@ -4,6 +4,19 @@ server:
 spring:
   application:
     name: ai-vision-voice-assistant-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3307/ai_vision_voice_assistant?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
   servlet:
     multipart:
       max-file-size: 2MB
@@ -18,6 +31,11 @@ management:
 assistant:
   cors:
     allowed-origins: ${ASSISTANT_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  auth:
+    jwt-secret: ${ASSISTANT_AUTH_JWT_SECRET:change-me-at-least-32-bytes-secret-for-dev-only}
+    jwt-issuer: ${ASSISTANT_AUTH_JWT_ISSUER:ai-vision-voice-assistant}
+    access-token-minutes: ${ASSISTANT_AUTH_ACCESS_TOKEN_MINUTES:30}
+    refresh-token-days: ${ASSISTANT_AUTH_REFRESH_TOKEN_DAYS:14}
   model:
     provider: ${ASSISTANT_MODEL_PROVIDER:mock}
     base-url: ${ASSISTANT_MODEL_BASE_URL:https://api.openai.com/v1}

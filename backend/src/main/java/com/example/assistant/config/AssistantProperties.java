@@ -12,6 +12,7 @@ public class AssistantProperties {
     private Model model = new Model();
     private Cost cost = new Cost();
     private Dialogue dialogue = new Dialogue();
+    private Auth auth = new Auth();
 
     public Cors getCors() {
         return cors;
@@ -43,6 +44,14 @@ public class AssistantProperties {
 
     public void setDialogue(Dialogue dialogue) {
         this.dialogue = dialogue;
+    }
+
+    public Auth getAuth() {
+        return auth;
+    }
+
+    public void setAuth(Auth auth) {
+        this.auth = auth;
     }
 
     public static class Cors {
@@ -153,6 +162,50 @@ public class AssistantProperties {
 
         public void setTemperature(double temperature) {
             this.temperature = temperature;
+        }
+    }
+
+
+    public static class Auth {
+        @NotBlank
+        private String jwtSecret = "change-me-at-least-32-bytes-secret-for-dev-only";
+        @NotBlank
+        private String jwtIssuer = "ai-vision-voice-assistant";
+        @Min(1)
+        private long accessTokenMinutes = 30;
+        @Min(1)
+        private long refreshTokenDays = 14;
+
+        public String getJwtSecret() {
+            return jwtSecret;
+        }
+
+        public void setJwtSecret(String jwtSecret) {
+            this.jwtSecret = jwtSecret;
+        }
+
+        public String getJwtIssuer() {
+            return jwtIssuer;
+        }
+
+        public void setJwtIssuer(String jwtIssuer) {
+            this.jwtIssuer = jwtIssuer;
+        }
+
+        public long getAccessTokenMinutes() {
+            return accessTokenMinutes;
+        }
+
+        public void setAccessTokenMinutes(long accessTokenMinutes) {
+            this.accessTokenMinutes = accessTokenMinutes;
+        }
+
+        public long getRefreshTokenDays() {
+            return refreshTokenDays;
+        }
+
+        public void setRefreshTokenDays(long refreshTokenDays) {
+            this.refreshTokenDays = refreshTokenDays;
         }
     }
 
