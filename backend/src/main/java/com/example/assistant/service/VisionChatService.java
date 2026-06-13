@@ -114,7 +114,7 @@ public class VisionChatService {
                 enableHistory,
                 boundedMaxOutputTokens,
                 history,
-                PromptBuilder.systemPrompt()
+                PromptBuilder.systemPrompt(properties.getDialogue())
         );
 
         VisionChatResult result = modelClient.chat(command);

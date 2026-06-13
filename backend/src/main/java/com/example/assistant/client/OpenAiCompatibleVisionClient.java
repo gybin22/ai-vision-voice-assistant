@@ -6,6 +6,7 @@ import com.example.assistant.model.ChatMessage;
 import com.example.assistant.model.VisionChatCommand;
 import com.example.assistant.model.VisionChatResult;
 import com.example.assistant.model.VisionFrame;
+import com.example.assistant.util.PromptBuilder;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -41,7 +42,7 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", properties.getModel().getModelName());
         body.put("max_tokens", command.maxOutputTokens());
-        body.put("temperature", 0.2);
+        body.put("temperature", properties.getDialogue().getTemperature());
         body.put("stream", false);
         body.put("messages", buildMessages(command));
 
@@ -115,18 +116,11 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
     }
 
     private String buildUserText(VisionChatCommand command) {
-        StringBuilder text = new StringBuilder();
-        text.append("用户问题：").append(command.question()).append("\n\n")
-                .append("下面有 ").append(command.frames().size()).append(" 张关键帧，均来自同一个摄像头，按时间顺序排列。")
-                .append("请把它们当作一个短动作片段来理解，重点分析前后变化，而不是只看最后一张图。\n");
-
-        if (command.frameMetadataJson() != null && !command.frameMetadataJson().isBlank()) {
-            text.append("\n前端关键帧元数据 JSON：")
-                    .append(command.frameMetadataJson())
-                    .append("\n");
-        }
-
-        return text.toString();
+        return PromptBuilder.visualContextPrompt(
+                command.question(),
+                command.frames().size(),
+                command.frameMetadataJson()
+        );
     }
 
     private String toDataUrl(VisionFrame frame) {

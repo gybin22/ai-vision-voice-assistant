@@ -6,6 +6,11 @@ assistant:
     api-key: ${DASHSCOPE_API_KEY:${ASSISTANT_MODEL_API_KEY:}}
     model-name: ${ASSISTANT_MODEL_MODEL_NAME:qwen3-vl-plus}
     timeout-ms: ${ASSISTANT_MODEL_TIMEOUT_MS:30000}
+  dialogue:
+    style: ${ASSISTANT_DIALOGUE_STYLE:natural}
+    max-sentences: ${ASSISTANT_DIALOGUE_MAX_SENTENCES:4}
+    allow-follow-up-question: ${ASSISTANT_DIALOGUE_ALLOW_FOLLOW_UP_QUESTION:true}
+    temperature: ${ASSISTANT_DIALOGUE_TEMPERATURE:0.25}
   cost:
     # qwen3-vl-plus 支持图片输入。MVP 继续保守限制，避免视觉 token 和带宽成本失控。
     max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:819200}

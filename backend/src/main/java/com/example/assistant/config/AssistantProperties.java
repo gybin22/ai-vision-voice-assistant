@@ -11,6 +11,7 @@ public class AssistantProperties {
     private Cors cors = new Cors();
     private Model model = new Model();
     private Cost cost = new Cost();
+    private Dialogue dialogue = new Dialogue();
 
     public Cors getCors() {
         return cors;
@@ -34,6 +35,14 @@ public class AssistantProperties {
 
     public void setCost(Cost cost) {
         this.cost = cost;
+    }
+
+    public Dialogue getDialogue() {
+        return dialogue;
+    }
+
+    public void setDialogue(Dialogue dialogue) {
+        this.dialogue = dialogue;
     }
 
     public static class Cors {
@@ -96,6 +105,54 @@ public class AssistantProperties {
 
         public void setTimeoutMs(int timeoutMs) {
             this.timeoutMs = timeoutMs;
+        }
+    }
+
+    public static class Dialogue {
+        /** natural / precise / companion / exam */
+        @NotBlank
+        private String style = "natural";
+        @Min(1)
+        private int maxSentences = 4;
+        private boolean allowFollowUpQuestion = true;
+        private double temperature = 0.55;
+
+        public String getStyle() {
+            return style;
+        }
+
+        public void setStyle(String style) {
+            this.style = style;
+        }
+
+        public int getMaxSentences() {
+            return maxSentences;
+        }
+
+        public void setMaxSentences(int maxSentences) {
+            this.maxSentences = maxSentences;
+        }
+
+        public boolean isAllowFollowUpQuestion() {
+            return allowFollowUpQuestion;
+        }
+
+        public void setAllowFollowUpQuestion(boolean allowFollowUpQuestion) {
+            this.allowFollowUpQuestion = allowFollowUpQuestion;
+        }
+
+        public double getTemperature() {
+            if (temperature < 0) {
+                return 0;
+            }
+            if (temperature > 1.2) {
+                return 1.2;
+            }
+            return temperature;
+        }
+
+        public void setTemperature(double temperature) {
+            this.temperature = temperature;
         }
     }
 
