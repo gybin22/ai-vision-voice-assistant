@@ -4,13 +4,9 @@ import com.example.assistant.client.MultimodalModelClient;
 import com.example.assistant.config.AssistantProperties;
 import com.example.assistant.dto.ResponseUsageDTO;
 import com.example.assistant.dto.VisionChatResponse;
-import com.example.assistant.exception.ModelCallException;
 import com.example.assistant.exception.CostLimitExceededException;
-import com.example.assistant.model.CachedVisionAnswer;
-import com.example.assistant.model.ChatMessage;
-import com.example.assistant.model.VisionChatCommand;
-import com.example.assistant.model.VisionChatResult;
-import com.example.assistant.model.VisionFrame;
+import com.example.assistant.exception.ModelCallException;
+import com.example.assistant.model.*;
 import com.example.assistant.util.ImageHashUtil;
 import com.example.assistant.util.PromptBuilder;
 import org.springframework.stereotype.Service;
@@ -21,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -54,6 +51,8 @@ public class VisionChatService {
             List<MultipartFile> images,
             MultipartFile legacyImage,
             String inputType,
+            String questionMode,
+            String visualSummary,
             boolean enableHistory,
             int maxOutputTokens,
             Integer clientImageWidth,
@@ -64,15 +63,18 @@ public class VisionChatService {
         Instant start = Instant.now();
         String requestId = "req_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         String normalizedQuestion = question == null ? "" : question.trim();
+        String normalizedQuestionMode = normalizeQuestionMode(questionMode);
+        String normalizedVisualSummary = visualSummary == null ? "" : visualSummary.trim();
         int boundedMaxOutputTokens = Math.min(maxOutputTokens, properties.getCost().getMaxOutputTokens());
 
-        List<VisionFrame> frames = readFrames(images, legacyImage);
+        List<VisionFrame> frames = readFrames(images, legacyImage, normalizedQuestionMode);
         long totalImageBytes = frames.stream().mapToLong(frame -> frame.bytes().length).sum();
 
         costControlService.validateRequest(
                 sessionId,
                 clientIp,
                 normalizedQuestion,
+                normalizedQuestionMode,
                 frames.size(),
                 totalImageBytes,
                 boundedMaxOutputTokens
@@ -80,12 +82,12 @@ public class VisionChatService {
 
         for (VisionFrame frame : frames) {
             if (frame.bytes().length > properties.getCost().getMaxImageBytes()) {
-                throw new CostLimitExceededException("IMAGE_TOO_LARGE", "第 " + frame.sequence() + " 张关键帧过大，请降低截图质量后重试。");
+                throw new CostLimitExceededException("IMAGE_TOO_LARGE", "第 " + frame.sequence() + " 张视觉帧过大，请降低截图质量后重试。");
             }
             imagePreprocessService.validateImage(frame.bytes(), frame.mimeType(), clientImageWidth, clientImageHeight);
         }
 
-        String cacheKey = ImageHashUtil.cacheKey(sessionId, normalizedQuestion, frames);
+        String cacheKey = ImageHashUtil.cacheKey(sessionId, normalizedQuestion, normalizedQuestionMode, normalizedVisualSummary, frames);
         CachedVisionAnswer cached = cacheService.get(cacheKey);
         if (cached != null) {
             long latency = Duration.between(start, Instant.now()).toMillis();
@@ -109,6 +111,8 @@ public class VisionChatService {
                 requestId,
                 sessionId,
                 normalizedQuestion,
+                normalizedQuestionMode,
+                normalizedVisualSummary,
                 frames,
                 frameMetadataJson == null ? "" : frameMetadataJson,
                 enableHistory,
@@ -141,7 +145,7 @@ public class VisionChatService {
         );
     }
 
-    private List<VisionFrame> readFrames(List<MultipartFile> images, MultipartFile legacyImage) {
+    private List<VisionFrame> readFrames(List<MultipartFile> images, MultipartFile legacyImage, String questionMode) {
         List<MultipartFile> source = new ArrayList<>();
         if (images != null) {
             source.addAll(images.stream().filter(file -> file != null && !file.isEmpty()).toList());
@@ -151,24 +155,38 @@ public class VisionChatService {
         }
 
         if (source.isEmpty()) {
+            if ("chat".equalsIgnoreCase(questionMode)) {
+                return List.of();
+            }
             throw new IllegalArgumentException("缺少图片文件");
         }
 
         if (source.size() > properties.getCost().getMaxFrameCount()) {
-            throw new IllegalArgumentException("关键帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");
+            throw new IllegalArgumentException("视觉帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");
         }
 
         List<VisionFrame> frames = new ArrayList<>();
         for (int i = 0; i < source.size(); i += 1) {
             MultipartFile file = source.get(i);
             String mimeType = file.getContentType() == null ? "image/jpeg" : file.getContentType();
-            String filename = file.getOriginalFilename() == null ? "keyframe-" + (i + 1) + ".jpg" : file.getOriginalFilename();
+            String filename = file.getOriginalFilename() == null ? "vision-frame-" + (i + 1) + ".jpg" : file.getOriginalFilename();
             try {
                 frames.add(new VisionFrame(i + 1, filename, file.getBytes(), mimeType));
             } catch (IOException e) {
-                throw new IllegalArgumentException("读取第 " + (i + 1) + " 张关键帧失败", e);
+                throw new IllegalArgumentException("读取第 " + (i + 1) + " 张视觉帧失败", e);
             }
         }
         return frames;
+    }
+
+    private String normalizeQuestionMode(String questionMode) {
+        if (questionMode == null || questionMode.isBlank()) {
+            return "chat";
+        }
+        String normalized = questionMode.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "current", "motion", "detailed" -> normalized;
+            default -> "chat";
+        };
     }
 }

@@ -20,7 +20,7 @@ public class CostControlService {
         this.properties = properties;
     }
 
-    public void validateRequest(String sessionId, String clientIp, String question, int frameCount, long totalImageBytes, int maxOutputTokens) {
+    public void validateRequest(String sessionId, String clientIp, String question, String questionMode, int frameCount, long totalImageBytes, int maxOutputTokens) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new CostLimitExceededException("SESSION_REQUIRED", "缺少 sessionId");
         }
@@ -30,8 +30,9 @@ public class CostControlService {
         if (question.length() > properties.getCost().getMaxQuestionLength()) {
             throw new CostLimitExceededException("QUESTION_TOO_LONG", "问题过长，请控制在 " + properties.getCost().getMaxQuestionLength() + " 字以内。");
         }
-        if (frameCount <= 0) {
-            throw new CostLimitExceededException("IMAGE_REQUIRED", "至少需要上传 1 张关键帧。");
+        boolean visualRequired = questionMode != null && !questionMode.equalsIgnoreCase("chat");
+        if (visualRequired && frameCount <= 0) {
+            throw new CostLimitExceededException("IMAGE_REQUIRED", "这个问题需要视觉上下文，但没有收到图片。请先启动摄像头后再试。");
         }
         if (frameCount > properties.getCost().getMaxFrameCount()) {
             throw new CostLimitExceededException("TOO_MANY_FRAMES", "关键帧数量过多，最多允许 " + properties.getCost().getMaxFrameCount() + " 张。");

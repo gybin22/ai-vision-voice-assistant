@@ -21,9 +21,9 @@ public final class PromptBuilder {
                 视觉信息使用原则：
                 1. 回答前先判断用户的问题是否真的需要视觉信息，但不要说出判断过程。
                 2. 如果用户的问题不依赖画面，就正常聊天，不要提“画面”“图片”“我看到”“摄像头”。
-                3. 如果用户的问题依赖画面，只回答与问题直接相关的内容，不要额外描述用户、背景、姿势或无关物品。
+                3. 如果用户的问题依赖画面，只回答与问题直接相关的内容。
                 4. 不要为了证明你能看见而反复使用“我看到”“画面里”“根据图片”“从关键帧来看”。
-                5. 如果视觉信息只是辅助判断，可以自然融入一句话，不要展开成观察报告。
+                5. 不要额外描述用户、背景、姿势或无关物品。
 
                 回答原则：
                 1. 先直接回答用户问题。
@@ -33,13 +33,12 @@ public final class PromptBuilder {
                 5. 不确定时说“不太确定”或“看起来像”，不要硬猜。
                 6. 除非用户要求详细分析，否则不要列点、不要长篇解释。
                 7. %s。
-                8. 涉及医疗、法律、安全、财务等高风险判断时，给出谨慎提醒，不要替用户做最终决定。
 
-                问题类型处理：
-                - 普通对话：正常回答，不要主动提画面。
-                - 当前画面问题：只回答用户问到的对象或状态。
-                - 动作变化问题：只描述与问题相关的关键变化。
-                - 不清楚的问题：只在必要时问一个简短问题。
+                问题模式：
+                - chat：普通聊天，禁止主动使用视觉信息。
+                - current：当前画面问题，只看当前帧，只回答用户问到的对象或状态。
+                - motion：动作变化问题，把图片理解为动作事件代表帧，只描述相关变化。
+                - detailed：详细视觉分析，可以更充分使用视觉证据，但仍不要机械描述。
                 """.formatted(
                 style,
                 Math.max(1, maxSentences),
@@ -47,36 +46,54 @@ public final class PromptBuilder {
         ).trim();
     }
 
-    public static String visualContextPrompt(String question, int frameCount, String frameMetadataJson) {
+    public static String userPrompt(String question, String questionMode, int frameCount, String visualSummary, String frameMetadataJson) {
+        String mode = safe(questionMode, "chat");
         StringBuilder text = new StringBuilder();
-        text.append("用户正在和你视频通话。\n\n")
-                .append("用户问题：\n")
+        text.append("用户问题：\n")
                 .append(safe(question, ""))
                 .append("\n\n")
-                .append("视觉上下文说明：\n")
-                .append("下面提供的是视频通话中的视觉上下文。只有在用户问题需要时才使用它。\n")
-                .append("这些图片是同一段摄像头画面中按时间顺序自动保存的关键帧，共 ")
-                .append(frameCount)
-                .append(" 张。\n")
-                .append("请把它们理解为一段短暂动作过程，而不是互不相关的图片。\n")
-                .append("如果用户问“我刚才做了什么”“发生了什么变化”，再关注关键帧之间的动作变化。\n")
-                .append("如果用户问“我手里拿的是什么”“这是什么”“你能看到什么”，再使用最后几帧中最清楚的视觉信息。\n")
-                .append("如果用户只是普通聊天、寒暄、表达想法或问非视觉问题，不要强行描述画面。\n");
+                .append("本轮问题模式：")
+                .append(mode)
+                .append("\n");
+
+        switch (mode) {
+            case "current" -> text.append("本轮只提供当前帧。请只回答用户问到的当前对象或状态，不要展开成画面描述。\n");
+            case "motion" -> text.append("本轮提供最近视觉事件的代表帧。请把它们理解为一段动作变化，只回答用户问到的变化。\n");
+            case "detailed" -> text.append("本轮提供较多视觉证据。可以更仔细分析，但不要复述无关背景或元数据。\n");
+            default -> text.append("本轮没有上传图片。请按普通聊天回答，不要声称看到了画面。\n");
+        }
+
+        if (frameCount > 0) {
+            text.append("\n视觉证据：共 ")
+                    .append(frameCount)
+                    .append(" 张图片，按时间顺序排列。\n");
+        }
+
+        if (visualSummary != null && !visualSummary.isBlank()) {
+            text.append("\n前端视觉摘要：\n")
+                    .append(visualSummary.trim())
+                    .append("\n")
+                    .append("摘要只用于帮助理解是否需要视觉信息，不要在回答中复述摘要字段。\n");
+        }
 
         if (frameMetadataJson != null && !frameMetadataJson.isBlank()) {
-            text.append("\n关键帧元数据 JSON：\n")
+            text.append("\n视觉帧元数据 JSON：\n")
                     .append(frameMetadataJson)
                     .append("\n")
                     .append("元数据只用于辅助理解时间顺序和变化强度，不要在回答中复述这些字段。\n");
         }
 
-        text.append("\n回答方式：\n")
+        text.append("\n回答要求：\n")
                 .append("- 用户问什么就答什么。\n")
-                .append("- 不要额外发挥，不要主动评论用户的外貌、姿势、背景或状态。\n")
-                .append("- 不要使用“画面中可以看到”“根据图片显示”“从关键帧来看”等证明式表达。\n")
-                .append("- 能像普通视频通话一样回答时，就不要提视觉来源。\n");
+                .append("- 普通聊天不要提画面。\n")
+                .append("- 视觉问题只回答相关内容，不要主动扩展。\n")
+                .append("- 不要使用“画面中可以看到”“根据图片显示”“从关键帧来看”等证明式表达。\n");
 
         return text.toString();
+    }
+
+    public static String visualContextPrompt(String question, int frameCount, String frameMetadataJson) {
+        return userPrompt(question, "motion", frameCount, "", frameMetadataJson);
     }
 
     private static String safe(String value, String fallback) {

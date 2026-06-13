@@ -38,7 +38,7 @@
 
           <button class="call-btn" :disabled="!stream" @click="saveKeyframeNow">
             <span class="call-icon">📌</span>
-            保存当前关键帧
+            保存当前事件帧
           </button>
 
           <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="speech.stop">
@@ -48,19 +48,14 @@
         </div>
 
         <KeyframePanel
-            :keyframes="keyframeRecorder.keyframes.value"
-            :is-running="keyframeRecorder.isRunning.value"
-            :status-text="keyframeRecorder.statusText.value"
-            :last-diff-score="keyframeRecorder.lastDiffScore.value"
-            :total-bytes="keyframeRecorder.totalBytes.value"
+          :events="keyframeRecorder.events.value"
+          :is-running="keyframeRecorder.isRunning.value"
+          :status-text="keyframeRecorder.statusText.value"
+          :last-diff-score="keyframeRecorder.lastDiffScore.value"
+          :total-bytes="keyframeRecorder.totalBytes.value"
+          :question-mode="activeQuestionMode"
         />
-        <!--
-        <div class="stage-hints">
-          <span>画面变化明显才保存关键帧</span>
-          <span>提问时按时间顺序上传全部关键帧</span>
-          <span>默认每轮最多 8 张，控制成本</span>
-        </div>
-        -->
+
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
         <div v-if="speechRecognition.error.value" class="notice notice-warning">{{ speechRecognition.error.value }}</div>
         <div v-if="!support.speechRecognition" class="notice notice-info">
@@ -81,27 +76,27 @@
 
         <div class="composer-card">
           <QuestionInput
-              :model-value="question"
-              @update:model-value="onQuestionInput"
-              @submit="submit(lastInputType)"
+            :model-value="question"
+            @update:model-value="onQuestionInput"
+            @submit="submit(lastInputType)"
           />
 
           <div class="composer-actions">
             <VoiceButton
-                :supported="speechRecognition.isSupported"
-                :is-listening="speechRecognition.isListening.value"
-                :disabled="loading"
-                @start="speechRecognition.start"
-                @stop="speechRecognition.stop"
+              :supported="speechRecognition.isSupported"
+              :is-listening="speechRecognition.isListening.value"
+              :disabled="loading"
+              @start="speechRecognition.start"
+              @stop="speechRecognition.stop"
             />
 
             <button class="send-button" :disabled="!canSend" @click="submit(lastInputType)">
-              {{ loading ? thinkingText : `发送 ${keyframeRecorder.frameCount.value || 1} 帧` }}
+              {{ loading ? thinkingText : `发送 · ${activeQuestionModeLabel}` }}
             </button>
           </div>
 
           <p class="composer-tip">
-            我会在你对话时自动记住明显变化的关键帧。你提问时，我会结合这段动作过程来回答，而不是只看最后一张图。
+            上传策略会按问题自动切换：普通聊天不发图，问当前画面只发当前帧，问刚才发生什么才发事件代表帧。
           </p>
         </div>
       </aside>
@@ -117,13 +112,14 @@ import CostStatusBar from '@/components/CostStatusBar.vue'
 import KeyframePanel from '@/components/KeyframePanel.vue'
 import QuestionInput from '@/components/QuestionInput.vue'
 import VoiceButton from '@/components/VoiceButton.vue'
-import { useKeyframeRecorder } from '@/composables/useKeyframeRecorder'
+import { useKeyframeRecorder, type PreparedVisionUpload } from '@/composables/useKeyframeRecorder'
 import { useMediaDevices } from '@/composables/useMediaDevices'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/composables/useSpeechSynthesis'
 import { askVision, clearConversation, getSessionUsage } from '@/services/assistantApi'
-import type { ChatMessage, InputType, SessionUsage } from '@/types/chat'
+import type { ChatMessage, InputType, QuestionMode, SessionUsage } from '@/types/chat'
 import { getBrowserSupport } from '@/utils/browserSupport'
+import { classifyQuestionMode, questionModeLabel } from '@/utils/questionMode'
 import { getOrCreateSessionId } from '@/utils/session'
 
 type CameraPreviewExpose = {
@@ -138,12 +134,13 @@ const keyframeRecorder = useKeyframeRecorder({
   intervalMs: 850,
   diffThreshold: 0.075,
   changedRatioThreshold: 0.06,
-  minSaveIntervalMs: 1800,
-  maxFrames: 8,
+  minSaveIntervalMs: 1500,
+  eventQuietMs: 1400,
+  maxEvents: 5,
+  maxUploadFrames: 8,
   maxLongSide: 768,
   quality: 0.72,
-  mimeType: 'image/jpeg',
-  captureInitialFrame: true
+  mimeType: 'image/jpeg'
 })
 const speechRecognition = useSpeechRecognition()
 const speech = useSpeechSynthesis()
@@ -155,32 +152,25 @@ const messages = ref<ChatMessage[]>([
   {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '先打开摄像头和麦克风吧。你可以像视频聊天一样问我，我会结合刚才捕捉到的关键帧来理解动作变化。'
+    content: '你可以直接像视频聊天一样问我。普通聊天我不会上传图片；你问画面或刚才的动作时，我再使用摄像头上下文。'
   }
 ])
 const loading = ref(false)
-const thinkingText = ref('我看一下...')
+const thinkingText = ref('我处理一下...')
 const usage = ref<SessionUsage | null>(null)
 
 const stream = media.stream
 const isStarting = media.isStarting
 const mediaError = media.error
 
-const thinkingTexts = [
-  '我看一下...',
-  '让我观察一下刚才的动作...',
-  '稍等，我正在理解画面...',
-  '我在对比这几张关键帧...',
-  '我先看看发生了什么...'
-]
+const activeQuestionMode = computed<QuestionMode>(() => classifyQuestionMode(question.value))
+const activeQuestionModeLabel = computed(() => questionModeLabel(activeQuestionMode.value))
 
 const canSend = computed(() => {
-  return Boolean(
-      question.value.trim() &&
-      stream.value &&
-      cameraRef.value?.isReady() &&
-      !loading.value
-  )
+  const text = question.value.trim()
+  if (!text || loading.value) return false
+  if (activeQuestionMode.value === 'chat') return true
+  return Boolean(stream.value && cameraRef.value?.isReady())
 })
 
 watch(speechRecognition.transcript, value => {
@@ -227,14 +217,14 @@ function stopCamera() {
 async function saveKeyframeNow() {
   const video = cameraRef.value?.getVideoElement()
   if (!video || !cameraRef.value?.isReady()) {
-    pushError('我还没拿到清晰的摄像头画面，稍等一下再试。')
+    pushError('摄像头画面还没准备好，稍等一下再试。')
     return
   }
 
   try {
     await keyframeRecorder.forceSaveCurrent(video, '手动保存')
   } catch (error) {
-    pushError(error instanceof Error ? error.message : '这次关键帧没保存成功，可以再试一次。')
+    pushError(error instanceof Error ? error.message : '这次事件帧没保存成功，可以再试一次。')
   }
 }
 
@@ -247,43 +237,54 @@ async function submit(inputType: InputType = 'text') {
   const text = question.value.trim()
   if (!text) return
 
-  if (!stream.value) {
-    pushError('先启动摄像头和麦克风，我才能看到你这边的画面。')
-    return
-  }
+  const mode = classifyQuestionMode(text)
+  let preparedUpload: PreparedVisionUpload | null = null
 
-  const video = cameraRef.value?.getVideoElement()
-  const isVideoReady = cameraRef.value?.isReady() ?? false
-
-  if (!video || !isVideoReady) {
-    pushError('摄像头画面还没准备好，稍等一下再问我。')
-    return
-  }
-
-  thinkingText.value = pickThinkingText()
+  thinkingText.value = pickThinkingText(mode)
   loading.value = true
   messages.value.push({ id: crypto.randomUUID(), role: 'user', content: text })
 
   try {
-    // 发送前再检测一次。若本轮还没有任何关键帧，则保存当前帧作为动作序列基准。
-    await keyframeRecorder.forceCheck(video, { saveIfEmpty: true, reason: '发送前检测' })
-    const frames = keyframeRecorder.getFramesForUpload()
+    if (mode === 'chat') {
+      preparedUpload = {
+        mode,
+        frames: [],
+        visualSummary: '本轮是普通聊天：没有上传图片，回答时不应主动提画面。',
+        eventCount: keyframeRecorder.eventCount.value,
+        dispose: () => {}
+      }
+    } else {
+      if (!stream.value) {
+        pushError('这个问题需要看摄像头画面，请先启动摄像头。')
+        return
+      }
 
-    if (!frames.length) {
-      pushError('我还没捕捉到明显变化。你可以稍微动一下，或者直接问当前画面。')
-      return
+      const video = cameraRef.value?.getVideoElement()
+      const isVideoReady = cameraRef.value?.isReady() ?? false
+
+      if (!video || !isVideoReady) {
+        pushError('摄像头画面还没准备好，稍等一下再问我。')
+        return
+      }
+
+      preparedUpload = await keyframeRecorder.prepareUpload(video, mode)
     }
 
     const response = await askVision({
       sessionId,
       question: text,
-      images: frames.map(frame => ({
+      questionMode: preparedUpload.mode,
+      visualSummary: preparedUpload.visualSummary,
+      images: preparedUpload.frames.map(frame => ({
         blob: frame.blob,
         width: frame.width,
         height: frame.height,
         capturedAt: frame.capturedAt,
         diffScore: frame.diffScore,
-        sequence: frame.sequence
+        changedRatio: frame.changedRatio,
+        sequence: frame.sequence,
+        eventSequence: frame.eventSequence,
+        kind: frame.kind
       })),
       inputType,
       enableHistory: true,
@@ -295,19 +296,24 @@ async function submit(inputType: InputType = 'text') {
       id: crypto.randomUUID(),
       role: 'assistant',
       content: response.answer,
-      meta: `${response.model}${response.cached ? ' · 命中缓存' : ''} · ${response.latencyMs}ms · 已发送 ${frames.length} 张关键帧 · ${totalKb}KB`
+      meta: buildMeta(response.model, response.cached, response.latencyMs, preparedUpload.mode, preparedUpload.frames.length, totalKb)
     })
 
     question.value = ''
     lastInputType.value = 'text'
-    keyframeRecorder.clear({ resetBaseline: true })
+
+    if (preparedUpload.mode === 'motion' || preparedUpload.mode === 'detailed') {
+      keyframeRecorder.clear({ resetBaseline: true })
+    }
+
     window.setTimeout(() => {
       speech.speak(response.answer)
-    }, 220)
+    }, 180)
     await refreshUsage()
   } catch (e) {
     pushError(e instanceof Error ? e.message : '我这边刚才没处理成功，可以再问一次。')
   } finally {
+    preparedUpload?.dispose()
     loading.value = false
   }
 }
@@ -327,8 +333,20 @@ async function waitForVideoReady(timeoutMs = 4000): Promise<HTMLVideoElement> {
   throw new Error('摄像头画面还没准备好，稍等一下再试。')
 }
 
-function pickThinkingText() {
-  return thinkingTexts[Math.floor(Math.random() * thinkingTexts.length)]
+function pickThinkingText(mode: QuestionMode) {
+  const texts: Record<QuestionMode, string[]> = {
+    chat: ['我想一下...', '我处理一下...', '稍等一下...'],
+    current: ['我看一下当前画面...', '正在看当前帧...', '我确认一下...'],
+    motion: ['我在对比刚才的动作...', '正在整理最近的视觉事件...', '我看一下刚才发生了什么...'],
+    detailed: ['我会多看几帧再回答...', '正在做更完整的视觉分析...', '我仔细对比一下...']
+  }
+  const candidates = texts[mode]
+  return candidates[Math.floor(Math.random() * candidates.length)]
+}
+
+function buildMeta(model: string, cached: boolean, latencyMs: number, mode: QuestionMode, frameCount: number, totalKb: number) {
+  const uploadText = frameCount > 0 ? `已发送 ${frameCount} 张视觉帧 · ${totalKb}KB` : '未上传图片'
+  return `${model}${cached ? ' · 命中缓存' : ''} · ${latencyMs}ms · ${questionModeLabel(mode)} · ${uploadText}`
 }
 
 function delay(ms: number) {

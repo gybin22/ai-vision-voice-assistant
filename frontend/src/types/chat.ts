@@ -1,5 +1,8 @@
 export type InputType = 'text' | 'voice'
 
+//判断用户问题属于哪种类型
+export type QuestionMode = 'chat' | 'current' | 'motion' | 'detailed'
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'error'
