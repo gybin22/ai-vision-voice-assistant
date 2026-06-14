@@ -1121,3 +1121,114 @@ video {
     justify-content: center;
   }
 }
+
+.token-balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  color: #0f6fa5;
+  background: linear-gradient(145deg, #f3faff, #ffffff);
+  border: 1px solid var(--baby-blue-200);
+  box-shadow: 0 10px 26px rgba(49, 117, 174, 0.10);
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.token-balance-pill strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.token-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--baby-blue-200);
+  background: linear-gradient(145deg, rgba(243, 250, 255, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.token-card h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 30px;
+  letter-spacing: -0.03em;
+}
+
+.token-card p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.recharge-panel {
+  margin: 18px 0;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(217, 232, 245, 0.96);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.profile-section-title h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.profile-section-title p {
+  margin: 6px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.recharge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recharge-card {
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--baby-blue-200);
+  background: #ffffff;
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 12px 30px rgba(49, 117, 174, 0.08);
+}
+
+.recharge-card strong {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.recharge-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.recharge-card:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: var(--baby-blue-300);
+  box-shadow: 0 16px 36px rgba(49, 117, 174, 0.14);
+}
+
+@media (max-width: 720px) {
+  .recharge-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .token-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

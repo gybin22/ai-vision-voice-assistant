@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 
 public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
@@ -53,14 +55,15 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
 
             String answer = extractAnswer(response);
             Usage usage = extractUsage(response);
-            double estimatedCost = estimateCost(usage.inputTokens(), usage.outputTokens());
+            double providerCostAmountYuan = calculateProviderCostYuan(usage.inputTokens(), usage.outputTokens());
 
             return new VisionChatResult(
                     answer,
                     properties.getModel().getModelName(),
                     usage.inputTokens(),
                     usage.outputTokens(),
-                    estimatedCost
+                    usage.totalTokens(),
+                    providerCostAmountYuan
             );
         } catch (RestClientResponseException e) {
             String responseBody = e.getResponseBodyAsString();
@@ -169,11 +172,12 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
     private Usage extractUsage(Map<?, ?> response) {
         Object usageObj = response.get("usage");
         if (!(usageObj instanceof Map<?, ?> usage)) {
-            return new Usage(0, 0);
+            return new Usage(0, 0,0);
         }
-        int input = toInt(usage.get("prompt_tokens"));
-        int output = toInt(usage.get("completion_tokens"));
-        return new Usage(input, output);
+        int input = firstPositive(toInt(usage.get("prompt_tokens")), toInt(usage.get("input_tokens")));
+        int output = firstPositive(toInt(usage.get("completion_tokens")), toInt(usage.get("output_tokens")));
+        int total = firstPositive(toInt(usage.get("total_tokens")), input + output);
+        return new Usage(input, output, total);
     }
 
     private int toInt(Object value) {
@@ -185,9 +189,23 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         }
     }
 
-    private double estimateCost(int inputTokens, int outputTokens) {
-        // MVP 只做估算。真实价格应按阿里云百炼 qwen3-vl-plus 价格表配置。
-        return (inputTokens / 1_000_000.0) * 0.15 + (outputTokens / 1_000_000.0) * 0.60;
+    private int firstPositive(int... values) {
+        for (int value : values) {
+            if (value > 0) {
+                return value;
+            }
+        }
+        return 0;
+    }
+
+    private double calculateProviderCostYuan(int inputTokens, int outputTokens) {
+        BigDecimal inputCost = BigDecimal.valueOf(Math.max(0, inputTokens))
+                .multiply(properties.getBilling().getProviderInputPricePerMillionYuan())
+                .divide(BigDecimal.valueOf(1_000_000L), 8, RoundingMode.HALF_UP);
+        BigDecimal outputCost = BigDecimal.valueOf(Math.max(0, outputTokens))
+                .multiply(properties.getBilling().getProviderOutputPricePerMillionYuan())
+                .divide(BigDecimal.valueOf(1_000_000L), 8, RoundingMode.HALF_UP);
+        return inputCost.add(outputCost).setScale(6, RoundingMode.HALF_UP).doubleValue();
     }
 
     private String trimRightSlash(String value) {
@@ -195,5 +213,5 @@ public class OpenAiCompatibleVisionClient implements MultimodalModelClient {
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
-    private record Usage(int inputTokens, int outputTokens) {}
+    private record Usage(int inputTokens, int outputTokens, int totalTokens) {}
 }

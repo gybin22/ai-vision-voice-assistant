@@ -19,8 +19,17 @@ export interface VisionChatResponse {
   usage: {
     inputTokens: number
     outputTokens: number
+    totalTokens: number
     imageBytes: number
-    estimatedCost: number
+    providerCostAmountYuan: number
+  }
+  billing: {
+    chargedTokens: number
+    balanceAfterTokens: number
+    tokenUnitPriceYuan: number
+    revenueAmountYuan: number
+    providerCostAmountYuan: number
+    grossProfitAmountYuan: number
   }
   latencyMs: number
 }
@@ -71,4 +80,17 @@ export interface RegisterPayload {
 export interface UpdateProfilePayload {
   nickname?: string
   avatarUrl?: string
+}
+
+
+export interface TokenBalance {
+  balanceTokens: number
+  totalRechargedTokens: number
+  totalUsedTokens: number
+}
+
+export interface TokenRechargeResponse {
+  balance: TokenBalance
+  addedTokens: number
+  transactionId: number
 }
