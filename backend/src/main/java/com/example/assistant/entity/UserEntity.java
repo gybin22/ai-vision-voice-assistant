@@ -26,7 +26,8 @@ public class UserEntity {
     @Column(nullable = false, length = 80)
     private String nickname;
 
-    @Column(name = "avatar_url", length = 512)
+    @Lob
+    @Column(name = "avatar_url", columnDefinition = "MEDIUMTEXT")
     private String avatarUrl;
 
     @Enumerated(EnumType.STRING)

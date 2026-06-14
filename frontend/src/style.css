@@ -1922,3 +1922,98 @@ video {
     width: 100%;
   }
 }
+
+.avatar-upload-field {
+  display: grid;
+  gap: 9px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.avatar-upload-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(243, 250, 255, 0.72);
+}
+
+.avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  font-size: 23px;
+}
+
+.avatar-upload-meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.avatar-upload-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.avatar-upload-meta small {
+  color: var(--muted);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.sr-only-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.token-card-actions {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.token-card-action-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.history-row-button {
+  align-self: flex-end;
+}
+
+@media (max-width: 720px) {
+  .avatar-upload-box,
+  .avatar-upload-actions,
+  .token-card-action-row {
+    width: 100%;
+  }
+
+  .avatar-upload-box {
+    align-items: flex-start;
+  }
+
+  .avatar-upload-actions > button,
+  .token-card-action-row > button,
+  .history-row-button {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .token-card-actions {
+    align-items: stretch;
+  }
+}
