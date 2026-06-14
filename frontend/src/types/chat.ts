@@ -38,3 +38,37 @@ export interface ApiErrorResponse {
   code: string
   message: string
 }
+
+export interface AuthUser {
+  id: number
+  email: string
+  nickname: string
+  avatarUrl?: string | null
+  status: 'ACTIVE' | 'DISABLED'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AuthResponse {
+  accessToken: string
+  refreshToken: string
+  expiresInSeconds: number
+  refreshExpiresInSeconds: number
+  user: AuthUser
+}
+
+export interface LoginPayload {
+  email: string
+  password: string
+}
+
+export interface RegisterPayload {
+  email: string
+  password: string
+  nickname?: string
+}
+
+export interface UpdateProfilePayload {
+  nickname?: string
+  avatarUrl?: string
+}

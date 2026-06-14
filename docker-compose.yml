@@ -1,9 +1,38 @@
 services:
+  mysql:
+    image: mysql:8.4
+    container_name: ai-vision-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ai_vision_voice_assistant
+      MYSQL_USER: assistant
+      MYSQL_PASSWORD: assistant123
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ai_vision_voice_assistant?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: assistant
+      SPRING_DATASOURCE_PASSWORD: assistant123
+      ASSISTANT_AUTH_JWT_SECRET: please-change-this-secret-to-at-least-32-bytes-long
       ASSISTANT_MODEL_PROVIDER: mock
       ASSISTANT_CORS_ALLOWED_ORIGINS: http://localhost:5173
+
+volumes:
+  mysql_data:

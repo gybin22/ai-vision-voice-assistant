@@ -8,7 +8,13 @@
         </div>
       </div>
 
-      <CostStatusBar :session-id="sessionId" :usage="usage" />
+      <div class="topbar-actions">
+        <CostStatusBar :session-id="sessionId" :usage="usage" />
+        <button class="account-button" @click="emit('open-profile')">
+          <span class="account-avatar">{{ accountInitial }}</span>
+          <span>{{ auth.user.value?.nickname || auth.user.value?.email || '个人中心' }}</span>
+        </button>
+      </div>
     </header>
 
     <section class="video-chat-shell">
@@ -117,9 +123,13 @@ import { useMediaDevices } from '@/composables/useMediaDevices'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/composables/useSpeechSynthesis'
 import { askVision, clearConversation, getSessionUsage } from '@/services/assistantApi'
+import { useAuth } from '@/composables/useAuth'
 import type { ChatMessage, InputType, SessionUsage } from '@/types/chat'
 import { getBrowserSupport } from '@/utils/browserSupport'
 import { getOrCreateSessionId } from '@/utils/session'
+
+const emit = defineEmits<{ (e: 'open-profile'): void }>()
+const auth = useAuth()
 
 type CameraPreviewExpose = {
   getVideoElement: () => HTMLVideoElement | null
@@ -157,6 +167,11 @@ const usage = ref<SessionUsage | null>(null)
 const stream = media.stream
 const isStarting = media.isStarting
 const mediaError = media.error
+
+const accountInitial = computed(() => {
+  const source = auth.user.value?.nickname || auth.user.value?.email || 'U'
+  return source.slice(0, 1).toUpperCase()
+})
 
 const canSend = computed(() => {
   const text = question.value.trim()
