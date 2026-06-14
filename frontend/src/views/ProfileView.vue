@@ -32,6 +32,9 @@
           <button class="auth-submit compact" :disabled="tokens.loading.value" @click="openRechargePackages">
             充值
           </button>
+          <button class="link-button" @click="emit('open-history')">
+            会话历史
+          </button>
           <button class="link-button" :disabled="tokens.loading.value" @click="refreshBalance">
             {{ tokens.loading.value ? '刷新中...' : '刷新余额' }}
           </button>
@@ -141,7 +144,7 @@ interface RechargePackage {
   description: string
 }
 
-const emit = defineEmits<{ (e: 'back'): void }>()
+const emit = defineEmits<{ (e: 'back'): void; (e: 'open-history'): void }>()
 const auth = useAuth()
 const tokens = useTokens()
 const nickname = ref(auth.user.value?.nickname ?? '')

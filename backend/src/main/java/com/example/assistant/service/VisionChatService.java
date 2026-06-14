@@ -9,6 +9,7 @@ import com.example.assistant.exception.CostLimitExceededException;
 import com.example.assistant.exception.ModelCallException;
 import com.example.assistant.model.*;
 import com.example.assistant.service.billing.TokenBillingService;
+import com.example.assistant.service.history.ChatHistoryService;
 import com.example.assistant.util.ImageHashUtil;
 import com.example.assistant.util.PromptBuilder;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,6 +32,7 @@ public class VisionChatService {
     private final AssistantProperties properties;
     private final ObjectMapper objectMapper;
     private final TokenBillingService tokenBillingService;
+    private final ChatHistoryService chatHistoryService;
 
     public VisionChatService(
             MultimodalModelClient modelClient,
@@ -40,7 +42,8 @@ public class VisionChatService {
             CacheService cacheService,
             AssistantProperties properties,
             ObjectMapper objectMapper,
-            TokenBillingService tokenBillingService
+            TokenBillingService tokenBillingService,
+            ChatHistoryService chatHistoryService
     ) {
         this.modelClient = modelClient;
         this.costControlService = costControlService;
@@ -50,6 +53,7 @@ public class VisionChatService {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.tokenBillingService = tokenBillingService;
+        this.chatHistoryService = chatHistoryService;
     }
 
     public VisionChatResponse chat(
@@ -109,6 +113,20 @@ public class VisionChatService {
                     latency,
                     true,
                     0.0
+            );
+            conversationService.append(sessionId, new ChatMessage("user", normalizedQuestion));
+            conversationService.append(sessionId, new ChatMessage("assistant", cached.answer()));
+            chatHistoryService.recordExchange(
+                    userId,
+                    sessionId,
+                    normalizedQuestion,
+                    cached.answer(),
+                    requestId,
+                    cached.model(),
+                    cached.inputTokens(),
+                    cached.outputTokens(),
+                    cached.totalTokens(),
+                    billing.chargedTokens()
             );
             costControlService.recordUsage(sessionId, clientIp, 0.0);
             return new VisionChatResponse(
@@ -188,6 +206,18 @@ public class VisionChatService {
         ));
         conversationService.append(sessionId, new ChatMessage("user", normalizedQuestion));
         conversationService.append(sessionId, new ChatMessage("assistant", result.answer()));
+        chatHistoryService.recordExchange(
+                userId,
+                sessionId,
+                normalizedQuestion,
+                result.answer(),
+                requestId,
+                result.model(),
+                result.inputTokens(),
+                result.outputTokens(),
+                result.totalTokens(),
+                billing.chargedTokens()
+        );
         costControlService.recordUsage(sessionId, clientIp, result.providerCostAmountYuan());
 
         return new VisionChatResponse(
