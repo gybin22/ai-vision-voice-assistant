@@ -28,34 +28,35 @@
             <h2>实时画面</h2>
           </div>
           <span class="status-pill" :class="{ active: Boolean(stream) }">
-            {{ stream ? '摄像头已连接' : '等待连接' }}
+            {{ stream ? '视觉上下文已开启' : '视觉上下文待启动' }}
           </span>
         </div>
 
         <CameraPreview ref="cameraRef" :stream="stream" />
 
-        <div class="call-controls">
-          <button class="call-btn call-btn-primary" :disabled="isStarting || Boolean(stream)" @click="startCamera">
-            <span class="call-icon">📷</span>
-            {{ isStarting ? '启动中...' : '启动摄像头和麦克风' }}
-          </button>
-
-          <button class="call-btn" :disabled="!stream" @click="stopCamera">
-            <span class="call-icon">⏹</span>
-            停止摄像头
-          </button>
-
-          <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="speech.stop">
-            <span class="call-icon">🔇</span>
-            停止播报
+        <div class="visual-context-strip" :class="{ active: Boolean(stream), preparing: isStarting }">
+          <div class="visual-context-copy">
+            <span class="visual-context-kicker">视觉上下文</span>
+            <strong>{{ visualContextTitle }}</strong>
+            <p>{{ visualContextHint }}</p>
+          </div>
+          <button class="text-button visual-speech-stop" :disabled="!speech.isSpeaking.value" @click="interruptSpeaking">
+            {{ liveMode ? '打断播报' : '停止播报' }}
           </button>
         </div>
 
+        <div v-if="liveMode" class="live-status-card" :class="liveStatus">
+          <div class="live-status-main">
+            <span class="live-dot" />
+            <strong>{{ liveStatusText }}</strong>
+          </div>
+          <p>{{ liveStatusHint }}</p>
+        </div>
 
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
         <div v-if="speechRecognition.error.value" class="notice notice-warning">{{ speechRecognition.error.value }}</div>
         <div v-if="!support.speechRecognition" class="notice notice-info">
-          这个浏览器暂时不能语音识别，你可以直接打字问我。
+          这个浏览器暂时不能语音识别，你可以切换到手动输入。
         </div>
       </section>
 
@@ -70,29 +71,83 @@
 
         <ChatMessages :messages="messages" />
 
-        <div class="composer-card">
+        <div
+          class="composer-card"
+          :class="{
+            'composer-card-live': liveMode,
+            'composer-card-entry': !liveMode && !manualMode,
+            'composer-card-manual': !liveMode && manualMode
+          }"
+        >
+          <div v-if="liveMode" class="live-transcript-panel">
+            <div class="live-transcript-header">
+              <span>{{ liveStatusText }}</span>
+              <strong>{{ liveCountdownText }}</strong>
+            </div>
+            <p :class="{ muted: !liveTranscriptDisplay }">
+              {{ liveTranscriptDisplay || '你可以直接说话。停顿约 1 秒后，我会自动提交这一句。' }}
+            </p>
+          </div>
+
+          <div v-else-if="!manualMode" class="live-entry-panel">
+            <span class="eyebrow">Live Conversation</span>
+            <h3>开启实时对话</h3>
+            <p>
+              点击一次后就可以直接说话；系统会在你停顿约 1 秒后自动提交，并结合最近 15 秒画面回答。
+            </p>
+            <div class="live-entry-actions">
+              <button class="send-button live-entry-primary" :disabled="isStarting || loading" @click="startLiveConversation">
+                {{ isStarting ? '正在准备...' : '开始实时对话' }}
+              </button>
+              <button class="text-button" @click="showManualInput">
+                切换到手动输入
+              </button>
+            </div>
+          </div>
+
           <QuestionInput
+            v-else
             :model-value="question"
             @update:model-value="onQuestionInput"
             @submit="submit(lastInputType)"
           />
 
-          <div class="composer-actions">
+          <div v-if="liveMode" class="composer-actions live-conversation-actions">
+            <button class="send-button live-stop-button" @click="stopLiveConversation({ stopSpeech: true })">
+              停止实时对话
+            </button>
+            <button class="voice-button" :disabled="!speech.isSpeaking.value" @click="interruptSpeaking">
+              打断播报
+            </button>
+            <button class="text-button live-manual-switch" @click="switchToManualInput">
+              手动输入
+            </button>
+          </div>
+
+          <div v-else-if="manualMode" class="composer-actions manual-composer-actions">
             <VoiceButton
               :supported="speechRecognition.isSupported"
               :is-listening="speechRecognition.isListening.value"
               :disabled="loading"
-              @start="speechRecognition.start"
+              @start="startManualVoiceInput"
               @stop="speechRecognition.stop"
             />
 
             <button class="send-button" :disabled="!canSend" @click="submit(lastInputType)">
-              {{ loading ? thinkingText : '发送 · 最近 15 秒视觉上下文' }}
+              {{ loading ? thinkingText : '发送' }}
+            </button>
+
+            <button class="text-button realtime-switch-button" :disabled="loading" @click="enterLiveIdle">
+              返回实时对话
             </button>
           </div>
 
           <p class="composer-tip">
-            当前策略：不再做问题分类；每次提问都会上传最近 15 秒、约 1fps 的视觉抽帧，最后一帧是发送瞬间当前帧。模型自行判断是否结合图片回答。
+            {{ liveMode
+              ? '实时模式：系统持续听你说话；检测到约 1 秒停顿后自动提交，并在 AI 播报结束后继续监听。'
+              : manualMode
+                ? '手动模式：你可以输入文字后点击发送；仍会上传最近 15 秒视觉上下文。'
+                : '推荐使用实时对话；手动输入保留为备用入口，适合不方便开麦或需要输入长文本时使用。' }}
           </p>
         </div>
       </aside>
@@ -126,6 +181,18 @@ type CameraPreviewExpose = {
   isReady: () => boolean
 }
 
+type SubmitOptions = {
+  fromLive?: boolean
+  textOverride?: string
+}
+
+type StopLiveOptions = {
+  stopSpeech?: boolean
+  showManual?: boolean
+}
+
+type LiveConversationStatus = 'off' | 'listening' | 'thinking' | 'speaking' | 'error'
+
 const sessionId = getOrCreateSessionId()
 const support = getBrowserSupport()
 const media = useMediaDevices()
@@ -153,6 +220,17 @@ const messages = ref<ChatMessage[]>([
 const loading = ref(false)
 const thinkingText = ref('我看一下最近 15 秒...')
 
+const liveMode = ref(false)
+const manualMode = ref(false)
+const liveStatus = ref<LiveConversationStatus>('off')
+const liveTranscript = ref('')
+const liveSilenceDelayMs = 1000
+const minLiveTextLength = 2
+const minLiveSubmitIntervalMs = 3000
+let liveSilenceTimer: number | undefined
+let liveRestartTimer: number | undefined
+let lastLiveSubmittedAt = 0
+
 const stream = media.stream
 const isStarting = media.isStarting
 const mediaError = media.error
@@ -164,14 +242,81 @@ const accountInitial = computed(() => {
 
 const canSend = computed(() => {
   const text = question.value.trim()
-  if (!text || loading.value) return false
-  return Boolean(stream.value && cameraRef.value?.isReady())
+  return Boolean(text && !loading.value && !isStarting.value && !liveMode.value && manualMode.value)
+})
+
+const liveStatusText = computed(() => {
+  switch (liveStatus.value) {
+    case 'listening':
+      return speechRecognition.isListening.value ? '正在听你说话' : '正在准备继续听'
+    case 'thinking':
+      return '正在思考'
+    case 'speaking':
+      return '正在回答'
+    case 'error':
+      return '实时对话异常'
+    default:
+      return '实时对话未开启'
+  }
+})
+
+const liveStatusHint = computed(() => {
+  switch (liveStatus.value) {
+    case 'listening':
+      return '说完一句后停顿约 1 秒，我会自动提交。'
+    case 'thinking':
+      return '我已经听到这一句，正在结合最近 15 秒画面生成回答。'
+    case 'speaking':
+      return 'AI 播报期间会暂停识别，避免把回答再次识别成你的话。'
+    case 'error':
+      return '可以停止实时对话后重新开启。'
+    default:
+      return '点击“开始实时对话”后，无需每次手动发送。'
+  }
+})
+
+const liveTranscriptDisplay = computed(() => liveTranscript.value.trim())
+
+const liveCountdownText = computed(() => {
+  if (liveStatus.value === 'listening') return '停顿 1 秒自动提交'
+  if (liveStatus.value === 'thinking') return '等待回答'
+  if (liveStatus.value === 'speaking') return '播报中'
+  return ''
+})
+
+const visualContextTitle = computed(() => {
+  if (isStarting.value) return '正在准备摄像头和最近 15 秒视觉帧'
+  if (stream.value) return '已开启，会在提问时自动上传最近 15 秒画面'
+  return '将在开始实时对话或发送问题时自动开启'
+})
+
+const visualContextHint = computed(() => {
+  if (stream.value) return '你不需要单独打开摄像头；手动输入和实时对话都会复用这段视觉上下文。'
+  return '摄像头不再作为主操作按钮展示，减少入口干扰。需要视觉回答时系统会自动准备。'
 })
 
 watch(speechRecognition.transcript, value => {
+  if (liveMode.value) {
+    handleLiveTranscript(value)
+    return
+  }
+
   if (value) {
     question.value = value
     lastInputType.value = 'voice'
+  }
+})
+
+watch(speechRecognition.isListening, value => {
+  if (!value && liveMode.value && liveStatus.value === 'listening' && !loading.value && !speech.isSpeaking.value) {
+    scheduleLiveRecognitionRestart()
+  }
+})
+
+watch(speechRecognition.error, value => {
+  if (value && liveMode.value) {
+    liveStatus.value = 'error'
+    clearLiveTimers()
   }
 })
 
@@ -179,6 +324,9 @@ watch(stream, value => {
   if (!value) {
     rollingBuffer.stop()
     rollingBuffer.clear()
+    if (liveMode.value) {
+      stopLiveConversation({ stopSpeech: true })
+    }
   }
 })
 
@@ -187,6 +335,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopLiveConversation({ stopSpeech: true })
   media.stop()
   rollingBuffer.stop()
   rollingBuffer.clear()
@@ -203,23 +352,195 @@ async function startCamera() {
   }
 }
 
-function stopCamera() {
-  rollingBuffer.stop()
-  rollingBuffer.clear()
-  media.stop()
-}
-
-
 function onQuestionInput(value: string) {
   question.value = value
   lastInputType.value = 'text'
 }
 
-async function submit(_inputType: InputType = 'text') {
-  const text = question.value.trim()
-  if (!text) return
+function startManualVoiceInput() {
+  speechRecognition.start({
+    continuous: false,
+    interimResults: true,
+    clearTranscriptOnStart: true
+  })
+}
+
+async function startLiveConversation() {
+  if (!speechRecognition.isSupported) {
+    pushError('当前浏览器不支持语音识别，无法开启实时对话。')
+    return
+  }
+
+  try {
+    if (!stream.value) {
+      await startCamera()
+    }
+
+    await waitForVideoReady()
+    speech.stop()
+    question.value = ''
+    liveTranscript.value = ''
+    manualMode.value = false
+    liveMode.value = true
+    liveStatus.value = 'listening'
+    startLiveRecognition()
+  } catch (error) {
+    liveMode.value = false
+    liveStatus.value = 'off'
+    pushError(error instanceof Error ? error.message : '实时对话启动失败。')
+  }
+}
+
+function stopLiveConversation(options: StopLiveOptions = {}) {
+  clearLiveTimers()
+  speechRecognition.stop()
+  speechRecognition.reset()
+  if (options.stopSpeech ?? true) {
+    speech.stop()
+  }
+  liveMode.value = false
+  liveStatus.value = 'off'
+  liveTranscript.value = ''
+  question.value = ''
+  if (options.showManual ?? false) {
+    manualMode.value = true
+  }
+}
+
+function showManualInput() {
+  if (liveMode.value) {
+    stopLiveConversation({ stopSpeech: true, showManual: true })
+    return
+  }
+
+  manualMode.value = true
+}
+
+function enterLiveIdle() {
+  if (liveMode.value) return
+  manualMode.value = false
+  question.value = ''
+  speechRecognition.stop()
+  speechRecognition.reset()
+}
+
+function switchToManualInput() {
+  stopLiveConversation({ stopSpeech: true, showManual: true })
+}
+
+function interruptSpeaking() {
+  speech.stop()
+  if (liveMode.value) {
+    resumeLiveListening()
+  }
+}
+
+function startLiveRecognition() {
+  if (!liveMode.value || loading.value || speech.isSpeaking.value) return
+
+  clearLiveTimers()
+  liveTranscript.value = ''
+  question.value = ''
+  liveStatus.value = 'listening'
+  speechRecognition.start({
+    continuous: true,
+    interimResults: true,
+    clearTranscriptOnStart: true
+  })
+}
+
+function handleLiveTranscript(value: string) {
+  if (liveStatus.value !== 'listening') return
+
+  const text = value.trim()
+  liveTranscript.value = text
+  question.value = text
+
+  if (text.length >= minLiveTextLength) {
+    scheduleLiveAutoSubmit()
+  } else {
+    clearLiveSilenceTimer()
+  }
+}
+
+function scheduleLiveAutoSubmit() {
+  clearLiveSilenceTimer()
+  liveSilenceTimer = window.setTimeout(() => {
+    void submitLiveUtterance()
+  }, liveSilenceDelayMs)
+}
+
+async function submitLiveUtterance() {
+  const text = liveTranscript.value.trim()
+  if (!liveMode.value || liveStatus.value !== 'listening' || loading.value || text.length < minLiveTextLength) return
+
+  const now = Date.now()
+  const elapsed = now - lastLiveSubmittedAt
+  if (elapsed < minLiveSubmitIntervalMs) {
+    clearLiveSilenceTimer()
+    liveSilenceTimer = window.setTimeout(() => {
+      void submitLiveUtterance()
+    }, minLiveSubmitIntervalMs - elapsed)
+    return
+  }
+
+  lastLiveSubmittedAt = now
+  clearLiveTimers()
+  liveStatus.value = 'thinking'
+  speechRecognition.stop()
+  speechRecognition.reset()
+  question.value = text
+  await submit('voice', { fromLive: true, textOverride: text })
+}
+
+function resumeLiveListening() {
+  if (!liveMode.value) return
+  if (loading.value || speech.isSpeaking.value) return
+
+  clearLiveTimers()
+  speechRecognition.reset()
+  question.value = ''
+  liveTranscript.value = ''
+  liveStatus.value = 'listening'
+  scheduleLiveRecognitionRestart(220)
+}
+
+function scheduleLiveRecognitionRestart(delayMs = 360) {
+  if (!liveMode.value || liveStatus.value !== 'listening' || loading.value || speech.isSpeaking.value) return
+
+  if (liveRestartTimer !== undefined) {
+    window.clearTimeout(liveRestartTimer)
+  }
+
+  liveRestartTimer = window.setTimeout(() => {
+    liveRestartTimer = undefined
+    if (liveMode.value && liveStatus.value === 'listening' && !loading.value && !speech.isSpeaking.value) {
+      startLiveRecognition()
+    }
+  }, delayMs)
+}
+
+function clearLiveTimers() {
+  clearLiveSilenceTimer()
+  if (liveRestartTimer !== undefined) {
+    window.clearTimeout(liveRestartTimer)
+    liveRestartTimer = undefined
+  }
+}
+
+function clearLiveSilenceTimer() {
+  if (liveSilenceTimer !== undefined) {
+    window.clearTimeout(liveSilenceTimer)
+    liveSilenceTimer = undefined
+  }
+}
+
+async function submit(_inputType: InputType = 'text', options: SubmitOptions = {}) {
+  const text = (options.textOverride ?? question.value).trim()
+  if (!text || loading.value) return
 
   let preparedUpload: PreparedVisionUpload | null = null
+  let shouldResumeLiveOnFailure = Boolean(options.fromLive && liveMode.value)
 
   thinkingText.value = '我看一下最近 15 秒...'
   loading.value = true
@@ -227,8 +548,7 @@ async function submit(_inputType: InputType = 'text') {
 
   try {
     if (!stream.value) {
-      pushError('请先启动摄像头。当前策略要求每次提问都上传最近 15 秒视觉上下文。')
-      return
+      await startCamera()
     }
 
     const video = cameraRef.value?.getVideoElement()
@@ -270,15 +590,31 @@ async function submit(_inputType: InputType = 'text') {
     question.value = ''
     lastInputType.value = 'text'
 
-    window.setTimeout(() => {
-      speech.speak(response.answer)
-    }, 180)
+    if (options.fromLive && liveMode.value) {
+      shouldResumeLiveOnFailure = false
+      liveStatus.value = 'speaking'
+      const didSpeak = speech.speak(response.answer, {
+        onEnd: resumeLiveListening,
+        onError: resumeLiveListening
+      })
+      if (!didSpeak) {
+        resumeLiveListening()
+      }
+    } else {
+      window.setTimeout(() => {
+        speech.speak(response.answer)
+      }, 180)
+    }
+
     await refreshTokenBalance()
   } catch (e) {
     pushError(e instanceof Error ? e.message : '我这边刚才没处理成功，可以再问一次。')
   } finally {
     preparedUpload?.dispose()
     loading.value = false
+    if (shouldResumeLiveOnFailure && liveMode.value) {
+      resumeLiveListening()
+    }
   }
 }
 
@@ -309,7 +645,6 @@ function pushError(content: string) {
   messages.value.push({ id: crypto.randomUUID(), role: 'error', content })
 }
 
-
 async function refreshTokenBalance() {
   try {
     await tokens.refreshBalance()
@@ -323,6 +658,10 @@ function formatTokens(value: number) {
 }
 
 async function clearLocalConversation() {
+  if (liveMode.value) {
+    stopLiveConversation({ stopSpeech: true })
+  }
+
   messages.value = []
   question.value = ''
   rollingBuffer.clear()

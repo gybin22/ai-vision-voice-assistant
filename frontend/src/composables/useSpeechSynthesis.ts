@@ -1,11 +1,17 @@
 import { ref } from 'vue'
 
+export interface SpeechSynthesisSpeakOptions {
+  onStart?: () => void
+  onEnd?: () => void
+  onError?: () => void
+}
+
 export function useSpeechSynthesis() {
   const isSupported = Boolean(window.speechSynthesis)
   const isSpeaking = ref(false)
 
-  function speak(text: string) {
-    if (!isSupported || !text.trim()) return
+  function speak(text: string, options: SpeechSynthesisSpeakOptions = {}) {
+    if (!isSupported || !text.trim()) return false
 
     stop()
     const utterance = new SpeechSynthesisUtterance(text)
@@ -15,15 +21,19 @@ export function useSpeechSynthesis() {
     utterance.volume = 1
     utterance.onstart = () => {
       isSpeaking.value = true
+      options.onStart?.()
     }
     utterance.onend = () => {
       isSpeaking.value = false
+      options.onEnd?.()
     }
     utterance.onerror = () => {
       isSpeaking.value = false
+      options.onError?.()
     }
 
     window.speechSynthesis.speak(utterance)
+    return true
   }
 
   function stop() {
