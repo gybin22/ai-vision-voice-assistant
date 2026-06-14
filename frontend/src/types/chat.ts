@@ -94,3 +94,43 @@ export interface TokenRechargeResponse {
   addedTokens: number
   transactionId: number
 }
+
+
+export interface ChatSessionSummary {
+  sessionId: string
+  title: string
+  messageCount: number
+  lastMessagePreview?: string | null
+  createdAt: string
+  updatedAt: string
+  lastMessageAt: string
+}
+
+export interface ChatHistoryDay {
+  date: string
+  label: string
+  sessions: ChatSessionSummary[]
+}
+
+export interface ChatHistoryMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  requestId?: string | null
+  modelName?: string | null
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  chargedTokens: number
+  createdAt: string
+}
+
+export interface ChatSessionDetail {
+  session: ChatSessionSummary
+  messages: ChatHistoryMessage[]
+}
+
+export interface ClearChatHistoryResponse {
+  deletedSessions: number
+  deletedMessages: number
+}

@@ -72,3 +72,39 @@ CREATE TABLE IF NOT EXISTS ai_request_logs (
   KEY idx_ai_request_logs_model_created (model_name, created_at),
   CONSTRAINT fk_ai_request_logs_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  session_id VARCHAR(100) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  message_count INT NOT NULL DEFAULT 0,
+  last_message_preview VARCHAR(500) NULL,
+  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  last_message_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_chat_sessions_user_session (user_id, session_id),
+  KEY idx_chat_sessions_user_last_message (user_id, last_message_at),
+  KEY idx_chat_sessions_user_updated (user_id, updated_at),
+  CONSTRAINT fk_chat_sessions_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  session_id VARCHAR(100) NOT NULL,
+  role VARCHAR(20) NOT NULL,
+  content TEXT NOT NULL,
+  request_id VARCHAR(64) NULL,
+  model_name VARCHAR(80) NULL,
+  input_tokens INT NOT NULL DEFAULT 0,
+  output_tokens INT NOT NULL DEFAULT 0,
+  total_tokens INT NOT NULL DEFAULT 0,
+  charged_tokens BIGINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  KEY idx_chat_messages_user_created (user_id, created_at),
+  KEY idx_chat_messages_session_created (user_id, session_id, created_at),
+  CONSTRAINT fk_chat_messages_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
