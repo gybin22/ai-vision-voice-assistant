@@ -28,25 +28,19 @@
             <h2>实时画面</h2>
           </div>
           <span class="status-pill" :class="{ active: Boolean(stream) }">
-            {{ stream ? '摄像头已连接' : '等待连接' }}
+            {{ stream ? '视觉上下文已开启' : '视觉上下文待启动' }}
           </span>
         </div>
 
         <CameraPreview ref="cameraRef" :stream="stream" />
 
-        <div class="call-controls compact-call-controls">
-          <button class="call-btn call-btn-primary" :disabled="isStarting || Boolean(stream)" @click="startCamera">
-            <span class="call-icon">📷</span>
-            {{ isStarting ? '启动中...' : '启动摄像头和麦克风' }}
-          </button>
-
-          <button class="call-btn" :disabled="!stream" @click="stopCamera">
-            <span class="call-icon">⏹</span>
-            停止摄像头
-          </button>
-
-          <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="interruptSpeaking">
-            <span class="call-icon">🔇</span>
+        <div class="visual-context-strip" :class="{ active: Boolean(stream), preparing: isStarting }">
+          <div class="visual-context-copy">
+            <span class="visual-context-kicker">视觉上下文</span>
+            <strong>{{ visualContextTitle }}</strong>
+            <p>{{ visualContextHint }}</p>
+          </div>
+          <button class="text-button visual-speech-stop" :disabled="!speech.isSpeaking.value" @click="interruptSpeaking">
             {{ liveMode ? '打断播报' : '停止播报' }}
           </button>
         </div>
@@ -119,7 +113,7 @@
           />
 
           <div v-if="liveMode" class="composer-actions live-conversation-actions">
-            <button class="send-button live-stop-button" @click="stopLiveConversation({ stopSpeech: true, showManual: true })">
+            <button class="send-button live-stop-button" @click="stopLiveConversation({ stopSpeech: true })">
               停止实时对话
             </button>
             <button class="voice-button" :disabled="!speech.isSpeaking.value" @click="interruptSpeaking">
@@ -143,8 +137,8 @@
               {{ loading ? thinkingText : '发送' }}
             </button>
 
-            <button class="text-button realtime-switch-button" :disabled="isStarting || loading" @click="startLiveConversation">
-              切换到实时对话
+            <button class="text-button realtime-switch-button" :disabled="loading" @click="enterLiveIdle">
+              返回实时对话
             </button>
           </div>
 
@@ -248,8 +242,7 @@ const accountInitial = computed(() => {
 
 const canSend = computed(() => {
   const text = question.value.trim()
-  if (!text || loading.value || liveMode.value || !manualMode.value) return false
-  return Boolean(stream.value && cameraRef.value?.isReady())
+  return Boolean(text && !loading.value && !isStarting.value && !liveMode.value && manualMode.value)
 })
 
 const liveStatusText = computed(() => {
@@ -289,6 +282,17 @@ const liveCountdownText = computed(() => {
   if (liveStatus.value === 'thinking') return '等待回答'
   if (liveStatus.value === 'speaking') return '播报中'
   return ''
+})
+
+const visualContextTitle = computed(() => {
+  if (isStarting.value) return '正在准备摄像头和最近 15 秒视觉帧'
+  if (stream.value) return '已开启，会在提问时自动上传最近 15 秒画面'
+  return '将在开始实时对话或发送问题时自动开启'
+})
+
+const visualContextHint = computed(() => {
+  if (stream.value) return '你不需要单独打开摄像头；手动输入和实时对话都会复用这段视觉上下文。'
+  return '摄像头不再作为主操作按钮展示，减少入口干扰。需要视觉回答时系统会自动准备。'
 })
 
 watch(speechRecognition.transcript, value => {
@@ -348,13 +352,6 @@ async function startCamera() {
   }
 }
 
-function stopCamera() {
-  stopLiveConversation({ stopSpeech: true })
-  rollingBuffer.stop()
-  rollingBuffer.clear()
-  media.stop()
-}
-
 function onQuestionInput(value: string) {
   question.value = value
   lastInputType.value = 'text'
@@ -366,15 +363,6 @@ function startManualVoiceInput() {
     interimResults: true,
     clearTranscriptOnStart: true
   })
-}
-
-async function toggleLiveConversation() {
-  if (liveMode.value) {
-    stopLiveConversation({ stopSpeech: true })
-    return
-  }
-
-  await startLiveConversation()
 }
 
 async function startLiveConversation() {
@@ -420,7 +408,20 @@ function stopLiveConversation(options: StopLiveOptions = {}) {
 }
 
 function showManualInput() {
+  if (liveMode.value) {
+    stopLiveConversation({ stopSpeech: true, showManual: true })
+    return
+  }
+
   manualMode.value = true
+}
+
+function enterLiveIdle() {
+  if (liveMode.value) return
+  manualMode.value = false
+  question.value = ''
+  speechRecognition.stop()
+  speechRecognition.reset()
 }
 
 function switchToManualInput() {
@@ -547,8 +548,7 @@ async function submit(_inputType: InputType = 'text', options: SubmitOptions = {
 
   try {
     if (!stream.value) {
-      pushError('请先启动摄像头。当前策略要求每次提问都上传最近 15 秒视觉上下文。')
-      return
+      await startCamera()
     }
 
     const video = cameraRef.value?.getVideoElement()
