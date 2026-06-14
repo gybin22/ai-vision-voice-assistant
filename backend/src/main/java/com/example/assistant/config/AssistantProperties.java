@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
+
 @Validated
 @ConfigurationProperties(prefix = "assistant")
 public class AssistantProperties {
@@ -13,6 +15,7 @@ public class AssistantProperties {
     private Cost cost = new Cost();
     private Dialogue dialogue = new Dialogue();
     private Auth auth = new Auth();
+    private Billing billing = new Billing();
 
     public Cors getCors() {
         return cors;
@@ -52,6 +55,14 @@ public class AssistantProperties {
 
     public void setAuth(Auth auth) {
         this.auth = auth;
+    }
+
+    public Billing getBilling() {
+        return billing;
+    }
+
+    public void setBilling(Billing billing) {
+        this.billing = billing;
     }
 
     public static class Cors {
@@ -206,6 +217,87 @@ public class AssistantProperties {
 
         public void setRefreshTokenDays(long refreshTokenDays) {
             this.refreshTokenDays = refreshTokenDays;
+        }
+    }
+
+
+    public static class Billing {
+        @Min(0)
+        private long minVisualChargeTokens = 5000;
+        @Min(0)
+        private long minStartBalanceTokens = 5000;
+        @Min(0)
+        private long maxDemoRechargeTokens = 1_000_000;
+        @Min(0)
+        private long inputTokenMultiplier = 1;
+        @Min(0)
+        private long outputTokenMultiplier = 4;
+        private BigDecimal tokenUnitPriceYuan = new BigDecimal("0.00001");
+        private BigDecimal providerInputPricePerMillionYuan = new BigDecimal("0.15");
+        private BigDecimal providerOutputPricePerMillionYuan = new BigDecimal("0.60");
+
+        public long getMinVisualChargeTokens() {
+            return minVisualChargeTokens;
+        }
+
+        public void setMinVisualChargeTokens(long minVisualChargeTokens) {
+            this.minVisualChargeTokens = minVisualChargeTokens;
+        }
+
+        public long getMinStartBalanceTokens() {
+            return minStartBalanceTokens;
+        }
+
+        public void setMinStartBalanceTokens(long minStartBalanceTokens) {
+            this.minStartBalanceTokens = minStartBalanceTokens;
+        }
+
+        public long getMaxDemoRechargeTokens() {
+            return maxDemoRechargeTokens;
+        }
+
+        public void setMaxDemoRechargeTokens(long maxDemoRechargeTokens) {
+            this.maxDemoRechargeTokens = maxDemoRechargeTokens;
+        }
+
+        public long getInputTokenMultiplier() {
+            return inputTokenMultiplier;
+        }
+
+        public void setInputTokenMultiplier(long inputTokenMultiplier) {
+            this.inputTokenMultiplier = inputTokenMultiplier;
+        }
+
+        public long getOutputTokenMultiplier() {
+            return outputTokenMultiplier;
+        }
+
+        public void setOutputTokenMultiplier(long outputTokenMultiplier) {
+            this.outputTokenMultiplier = outputTokenMultiplier;
+        }
+
+        public BigDecimal getTokenUnitPriceYuan() {
+            return tokenUnitPriceYuan;
+        }
+
+        public void setTokenUnitPriceYuan(BigDecimal tokenUnitPriceYuan) {
+            this.tokenUnitPriceYuan = tokenUnitPriceYuan;
+        }
+
+        public BigDecimal getProviderInputPricePerMillionYuan() {
+            return providerInputPricePerMillionYuan;
+        }
+
+        public void setProviderInputPricePerMillionYuan(BigDecimal providerInputPricePerMillionYuan) {
+            this.providerInputPricePerMillionYuan = providerInputPricePerMillionYuan;
+        }
+
+        public BigDecimal getProviderOutputPricePerMillionYuan() {
+            return providerOutputPricePerMillionYuan;
+        }
+
+        public void setProviderOutputPricePerMillionYuan(BigDecimal providerOutputPricePerMillionYuan) {
+            this.providerOutputPricePerMillionYuan = providerOutputPricePerMillionYuan;
         }
     }
 

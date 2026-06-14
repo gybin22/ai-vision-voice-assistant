@@ -2,11 +2,13 @@ package com.example.assistant.controller;
 
 import com.example.assistant.dto.SessionUsageDTO;
 import com.example.assistant.dto.VisionChatResponse;
+import com.example.assistant.security.UserPrincipal;
 import com.example.assistant.service.ConversationService;
 import com.example.assistant.service.CostControlService;
 import com.example.assistant.service.VisionChatService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,10 +43,12 @@ public class ChatController {
             @RequestParam(required = false) Integer clientImageWidth,
             @RequestParam(required = false) Integer clientImageHeight,
             @RequestParam(required = false) String frameMetadata,
-            HttpServletRequest request
+            HttpServletRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         String clientIp = resolveClientIp(request);
         return visionChatService.chat(
+                principal.getId(),
                 sessionId,
                 question,
                 images,

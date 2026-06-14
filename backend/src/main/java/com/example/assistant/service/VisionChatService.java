@@ -4,9 +4,11 @@ import com.example.assistant.client.MultimodalModelClient;
 import com.example.assistant.config.AssistantProperties;
 import com.example.assistant.dto.ResponseUsageDTO;
 import com.example.assistant.dto.VisionChatResponse;
+import com.example.assistant.dto.billing.BillingUsageDTO;
 import com.example.assistant.exception.CostLimitExceededException;
 import com.example.assistant.exception.ModelCallException;
 import com.example.assistant.model.*;
+import com.example.assistant.service.billing.TokenBillingService;
 import com.example.assistant.util.ImageHashUtil;
 import com.example.assistant.util.PromptBuilder;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,6 +30,7 @@ public class VisionChatService {
     private final CacheService cacheService;
     private final AssistantProperties properties;
     private final ObjectMapper objectMapper;
+    private final TokenBillingService tokenBillingService;
 
     public VisionChatService(
             MultimodalModelClient modelClient,
@@ -36,7 +39,8 @@ public class VisionChatService {
             ConversationService conversationService,
             CacheService cacheService,
             AssistantProperties properties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            TokenBillingService tokenBillingService
     ) {
         this.modelClient = modelClient;
         this.costControlService = costControlService;
@@ -45,9 +49,11 @@ public class VisionChatService {
         this.cacheService = cacheService;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.tokenBillingService = tokenBillingService;
     }
 
     public VisionChatResponse chat(
+            Long userId,
             String sessionId,
             String question,
             List<MultipartFile> images,
@@ -77,6 +83,7 @@ public class VisionChatService {
                 totalImageBytes,
                 boundedMaxOutputTokens
         );
+        tokenBillingService.validateCanStartVisionRequest(userId);
 
         for (VisionFrame frame : frames) {
             if (frame.bytes().length > properties.getCost().getMaxImageBytes()) {
@@ -89,14 +96,29 @@ public class VisionChatService {
         CachedVisionAnswer cached = cacheService.get(cacheKey);
         if (cached != null) {
             long latency = Duration.between(start, Instant.now()).toMillis();
-            costControlService.recordUsage(sessionId, clientIp, cached.estimatedCost());
+            BillingUsageDTO billing = tokenBillingService.settleSuccessfulRequest(
+                    userId,
+                    requestId,
+                    sessionId,
+                    cached.model(),
+                    cached.inputTokens(),
+                    cached.outputTokens(),
+                    cached.totalTokens(),
+                    frames.size(),
+                    totalImageBytes,
+                    latency,
+                    true,
+                    0.0
+            );
+            costControlService.recordUsage(sessionId, clientIp, 0.0);
             return new VisionChatResponse(
                     requestId,
                     sessionId,
                     cached.answer(),
                     cached.model(),
                     true,
-                    new ResponseUsageDTO(cached.inputTokens(), cached.outputTokens(), totalImageBytes, cached.estimatedCost()),
+                    new ResponseUsageDTO(cached.inputTokens(), cached.outputTokens(), cached.totalTokens(), totalImageBytes, 0.0),
+                    billing,
                     latency
             );
         }
@@ -118,26 +140,64 @@ public class VisionChatService {
                 PromptBuilder.systemPrompt(properties.getDialogue())
         );
 
-        VisionChatResult result = modelClient.chat(command);
+        VisionChatResult result;
+        try {
+            result = modelClient.chat(command);
+        } catch (RuntimeException e) {
+            long latency = Duration.between(start, Instant.now()).toMillis();
+            tokenBillingService.recordFailedRequest(
+                    userId,
+                    requestId,
+                    sessionId,
+                    properties.getModel().getModelName(),
+                    frames.size(),
+                    totalImageBytes,
+                    latency,
+                    e.getMessage()
+            );
+            throw e;
+        }
+
         if (result.answer() == null || result.answer().isBlank()) {
             throw new ModelCallException("模型返回空答案", null);
         }
 
+        long latency = Duration.between(start, Instant.now()).toMillis();
+        BillingUsageDTO billing = tokenBillingService.settleSuccessfulRequest(
+                userId,
+                requestId,
+                sessionId,
+                result.model(),
+                result.inputTokens(),
+                result.outputTokens(),
+                result.totalTokens(),
+                frames.size(),
+                totalImageBytes,
+                latency,
+                false,
+                result.providerCostAmountYuan()
+        );
+
         cacheService.put(cacheKey, new CachedVisionAnswer(
-                result.answer(), result.model(), result.inputTokens(), result.outputTokens(), result.estimatedCost()
+                result.answer(),
+                result.model(),
+                result.inputTokens(),
+                result.outputTokens(),
+                result.totalTokens(),
+                result.providerCostAmountYuan()
         ));
         conversationService.append(sessionId, new ChatMessage("user", normalizedQuestion));
         conversationService.append(sessionId, new ChatMessage("assistant", result.answer()));
-        costControlService.recordUsage(sessionId, clientIp, result.estimatedCost());
+        costControlService.recordUsage(sessionId, clientIp, result.providerCostAmountYuan());
 
-        long latency = Duration.between(start, Instant.now()).toMillis();
         return new VisionChatResponse(
                 requestId,
                 sessionId,
                 result.answer(),
                 result.model(),
                 false,
-                new ResponseUsageDTO(result.inputTokens(), result.outputTokens(), totalImageBytes, result.estimatedCost()),
+                new ResponseUsageDTO(result.inputTokens(), result.outputTokens(), result.totalTokens(), totalImageBytes, result.providerCostAmountYuan()),
+                billing,
                 latency
         );
     }
@@ -164,7 +224,7 @@ public class VisionChatService {
         for (int i = 0; i < source.size(); i += 1) {
             MultipartFile file = source.get(i);
             int sequence = i + 1;
-            FrameMeta meta = metadataBySequence.getOrDefault(sequence, FrameMeta.empty(sequence));
+            FrameMeta meta = metadataBySequence.getOrDefault(sequence, FrameMeta.empty(sequence, source.size()));
             String mimeType = file.getContentType() == null ? "image/jpeg" : file.getContentType();
             String filename = file.getOriginalFilename() == null ? "rolling-frame-" + sequence + ".jpg" : file.getOriginalFilename();
             try {
@@ -223,11 +283,9 @@ public class VisionChatService {
         return result;
     }
 
-
     private static String frameRoleFallback(int sequence, int totalFrames) {
         return sequence == totalFrames ? "current" : "history";
     }
-
 
     private static Integer intValueOrNull(JsonNode node, String field) {
         JsonNode value = node.get(field);
@@ -248,8 +306,8 @@ public class VisionChatService {
             Integer height,
             Long size
     ) {
-        private static FrameMeta empty(int sequence) {
-            return new FrameMeta(sequence, "history", null, null, null, null, null);
+        private static FrameMeta empty(int sequence, int totalFrames) {
+            return new FrameMeta(sequence, frameRoleFallback(sequence, totalFrames), null, null, null, null, null);
         }
     }
 }

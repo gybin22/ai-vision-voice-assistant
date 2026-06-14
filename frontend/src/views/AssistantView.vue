@@ -9,6 +9,10 @@
       </div>
 
       <div class="topbar-actions">
+        <div class="token-balance-pill">
+          <span>Tokens</span>
+          <strong>{{ formatTokens(tokens.balanceTokens.value) }}</strong>
+        </div>
         <CostStatusBar :session-id="sessionId" :usage="usage" />
         <button class="account-button" @click="emit('open-profile')">
           <span class="account-avatar">{{ accountInitial }}</span>
@@ -124,12 +128,14 @@ import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/composables/useSpeechSynthesis'
 import { askVision, clearConversation, getSessionUsage } from '@/services/assistantApi'
 import { useAuth } from '@/composables/useAuth'
+import { useTokens } from '@/composables/useTokens'
 import type { ChatMessage, InputType, SessionUsage } from '@/types/chat'
 import { getBrowserSupport } from '@/utils/browserSupport'
 import { getOrCreateSessionId } from '@/utils/session'
 
 const emit = defineEmits<{ (e: 'open-profile'): void }>()
 const auth = useAuth()
+const tokens = useTokens()
 
 type CameraPreviewExpose = {
   getVideoElement: () => HTMLVideoElement | null
@@ -283,11 +289,12 @@ async function submit(_inputType: InputType = 'text') {
     })
 
     const totalKb = Math.round(response.usage.imageBytes / 1024)
+    tokens.applyBalanceAfter(response.billing.balanceAfterTokens)
     messages.value.push({
       id: crypto.randomUUID(),
       role: 'assistant',
       content: response.answer,
-      meta: buildMeta(response.model, response.cached, response.latencyMs, preparedUpload.frames.length, totalKb)
+      meta: buildMeta(response.model, response.cached, response.latencyMs, preparedUpload.frames.length, totalKb, response.billing.chargedTokens, response.usage.totalTokens)
     })
 
     question.value = ''
@@ -297,6 +304,7 @@ async function submit(_inputType: InputType = 'text') {
       speech.speak(response.answer)
     }, 180)
     await refreshUsage()
+  await refreshTokenBalance()
   } catch (e) {
     pushError(e instanceof Error ? e.message : '我这边刚才没处理成功，可以再问一次。')
   } finally {
@@ -320,8 +328,8 @@ async function waitForVideoReady(timeoutMs = 4000): Promise<HTMLVideoElement> {
   throw new Error('摄像头画面还没准备好，稍等一下再试。')
 }
 
-function buildMeta(model: string, cached: boolean, latencyMs: number, frameCount: number, totalKb: number) {
-  return `${model}${cached ? ' · 命中缓存' : ''} · ${latencyMs}ms · 最近 15 秒视觉上下文 · 已发送 ${frameCount} 帧 · ${totalKb}KB`
+function buildMeta(model: string, cached: boolean, latencyMs: number, frameCount: number, totalKb: number, chargedTokens: number, totalTokens: number) {
+  return `${model}${cached ? ' · 命中缓存' : ''} · ${latencyMs}ms · 最近 15 秒视觉上下文 · 已发送 ${frameCount} 帧 · ${totalKb}KB · 模型 ${formatTokens(totalTokens)} tokens · 扣减 ${formatTokens(chargedTokens)} tokens`
 }
 
 function delay(ms: number) {
@@ -338,6 +346,18 @@ async function refreshUsage() {
   } catch {
     // 用量查询失败不影响主流程
   }
+}
+
+async function refreshTokenBalance() {
+  try {
+    await tokens.refreshBalance()
+  } catch {
+    // Tokens 查询失败不影响页面打开；发送请求时后端仍会校验余额。
+  }
+}
+
+function formatTokens(value: number) {
+  return Math.floor(value).toLocaleString('zh-CN')
 }
 
 async function clearLocalConversation() {

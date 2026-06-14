@@ -5,5 +5,6 @@ public record CachedVisionAnswer(
         String model,
         int inputTokens,
         int outputTokens,
-        double estimatedCost
+        int totalTokens,
+        double providerCostAmountYuan
 ) {}

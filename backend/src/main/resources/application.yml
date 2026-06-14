@@ -48,6 +48,16 @@ assistant:
     max-sentences: ${ASSISTANT_DIALOGUE_MAX_SENTENCES:2}
     allow-follow-up-question: ${ASSISTANT_DIALOGUE_ALLOW_FOLLOW_UP_QUESTION:false}
     temperature: ${ASSISTANT_DIALOGUE_TEMPERATURE:0.25}
+
+  billing:
+    token-unit-price-yuan: ${ASSISTANT_BILLING_TOKEN_UNIT_PRICE_YUAN:0.00001}
+    input-token-multiplier: ${ASSISTANT_BILLING_INPUT_TOKEN_MULTIPLIER:1}
+    output-token-multiplier: ${ASSISTANT_BILLING_OUTPUT_TOKEN_MULTIPLIER:4}
+    min-visual-charge-tokens: ${ASSISTANT_BILLING_MIN_VISUAL_CHARGE_TOKENS:5000}
+    min-start-balance-tokens: ${ASSISTANT_BILLING_MIN_START_BALANCE_TOKENS:5000}
+    max-demo-recharge-tokens: ${ASSISTANT_BILLING_MAX_DEMO_RECHARGE_TOKENS:1000000}
+    provider-input-price-per-million-yuan: ${ASSISTANT_BILLING_PROVIDER_INPUT_PRICE_PER_MILLION_YUAN:0.15}
+    provider-output-price-per-million-yuan: ${ASSISTANT_BILLING_PROVIDER_OUTPUT_PRICE_PER_MILLION_YUAN:0.60}
   cost:
     max-image-bytes: ${ASSISTANT_COST_MAX_IMAGE_BYTES:524288}
     max-frame-count: ${ASSISTANT_COST_MAX_FRAME_COUNT:15}
