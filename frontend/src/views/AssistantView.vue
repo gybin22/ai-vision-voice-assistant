@@ -13,7 +13,6 @@
           <span>Tokens</span>
           <strong>{{ formatTokens(tokens.balanceTokens.value) }}</strong>
         </div>
-        <CostStatusBar :session-id="sessionId" :usage="usage" />
         <button class="account-button" @click="emit('open-profile')">
           <span class="account-avatar">{{ accountInitial }}</span>
           <span>{{ auth.user.value?.nickname || auth.user.value?.email || '个人中心' }}</span>
@@ -46,25 +45,12 @@
             停止摄像头
           </button>
 
-          <button class="call-btn" :disabled="!stream" @click="saveFrameNow">
-            <span class="call-icon">📌</span>
-            立即采样一帧
-          </button>
-
           <button class="call-btn" :disabled="!speech.isSpeaking.value" @click="speech.stop">
             <span class="call-icon">🔇</span>
             停止播报
           </button>
         </div>
 
-        <KeyframePanel
-          :frames="rollingBuffer.frames.value"
-          :is-running="rollingBuffer.isRunning.value"
-          :status-text="rollingBuffer.statusText.value"
-          :total-bytes="rollingBuffer.totalBytes.value"
-          :coverage-seconds="rollingBuffer.coverageSeconds.value"
-          :max-frames="15"
-        />
 
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
         <div v-if="speechRecognition.error.value" class="notice notice-warning">{{ speechRecognition.error.value }}</div>
@@ -118,18 +104,16 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CameraPreview from '@/components/CameraPreview.vue'
 import ChatMessages from '@/components/ChatMessages.vue'
-import CostStatusBar from '@/components/CostStatusBar.vue'
-import KeyframePanel from '@/components/KeyframePanel.vue'
 import QuestionInput from '@/components/QuestionInput.vue'
 import VoiceButton from '@/components/VoiceButton.vue'
 import { useRollingFrameBuffer, type PreparedVisionUpload } from '@/composables/useRollingFrameBuffer'
 import { useMediaDevices } from '@/composables/useMediaDevices'
 import { useSpeechRecognition } from '@/composables/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/composables/useSpeechSynthesis'
-import { askVision, clearConversation, getSessionUsage } from '@/services/assistantApi'
+import { askVision, clearConversation } from '@/services/assistantApi'
 import { useAuth } from '@/composables/useAuth'
 import { useTokens } from '@/composables/useTokens'
-import type { ChatMessage, InputType, SessionUsage } from '@/types/chat'
+import type { ChatMessage, InputType } from '@/types/chat'
 import { getBrowserSupport } from '@/utils/browserSupport'
 import { getOrCreateSessionId } from '@/utils/session'
 
@@ -168,7 +152,6 @@ const messages = ref<ChatMessage[]>([
 ])
 const loading = ref(false)
 const thinkingText = ref('我看一下最近 15 秒...')
-const usage = ref<SessionUsage | null>(null)
 
 const stream = media.stream
 const isStarting = media.isStarting
@@ -200,7 +183,7 @@ watch(stream, value => {
 })
 
 onMounted(() => {
-  refreshUsage()
+  void refreshTokenBalance()
 })
 
 onBeforeUnmount(() => {
@@ -226,19 +209,6 @@ function stopCamera() {
   media.stop()
 }
 
-async function saveFrameNow() {
-  const video = cameraRef.value?.getVideoElement()
-  if (!video || !cameraRef.value?.isReady()) {
-    pushError('摄像头画面还没准备好，稍等一下再试。')
-    return
-  }
-
-  try {
-    await rollingBuffer.forceSaveCurrent(video)
-  } catch (error) {
-    pushError(error instanceof Error ? error.message : '这次采样没保存成功，可以再试一次。')
-  }
-}
 
 function onQuestionInput(value: string) {
   question.value = value
@@ -303,8 +273,7 @@ async function submit(_inputType: InputType = 'text') {
     window.setTimeout(() => {
       speech.speak(response.answer)
     }, 180)
-    await refreshUsage()
-  await refreshTokenBalance()
+    await refreshTokenBalance()
   } catch (e) {
     pushError(e instanceof Error ? e.message : '我这边刚才没处理成功，可以再问一次。')
   } finally {
@@ -340,13 +309,6 @@ function pushError(content: string) {
   messages.value.push({ id: crypto.randomUUID(), role: 'error', content })
 }
 
-async function refreshUsage() {
-  try {
-    usage.value = await getSessionUsage(sessionId)
-  } catch {
-    // 用量查询失败不影响主流程
-  }
-}
 
 async function refreshTokenBalance() {
   try {
@@ -366,7 +328,6 @@ async function clearLocalConversation() {
   rollingBuffer.clear()
   try {
     await clearConversation(sessionId)
-    await refreshUsage()
   } catch {
     // 忽略清理错误
   }
