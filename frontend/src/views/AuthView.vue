@@ -2,10 +2,9 @@
   <main class="auth-page">
     <section class="auth-card">
       <div class="auth-brand">
-        <div class="brand-mark">AI</div>
+        <div class="brand-mark">VL</div>
         <div>
-          <h1>AI 视觉语音对话助手</h1>
-          <p>登录后使用视觉对话、查看个人资料，并为后续充值点数做准备。</p>
+          <h1>VoxLens AI</h1>
         </div>
       </div>
 

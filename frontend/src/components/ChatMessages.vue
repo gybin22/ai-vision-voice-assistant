@@ -7,7 +7,7 @@
       :class="message.role"
     >
       <div class="avatar">
-        {{ message.role === 'user' ? '你' : message.role === 'assistant' ? 'AI' : '!' }}
+        {{ message.role === 'user' ? '你' : message.role === 'assistant' ? 'VL' : '!' }}
       </div>
 
       <div class="message-bubble">

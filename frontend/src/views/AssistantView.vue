@@ -2,9 +2,9 @@
   <main class="video-chat-page">
     <header class="app-topbar">
       <div class="brand">
-        <div class="brand-mark">AI</div>
+        <div class="brand-mark">VL</div>
         <div>
-          <h1>AI 视觉语音对话助手</h1>
+          <h1>VoxLens AI</h1>
         </div>
       </div>
 
@@ -25,7 +25,6 @@
         <div class="stage-header">
           <div>
             <span class="eyebrow">Live Camera</span>
-            <h2>实时画面</h2>
           </div>
           <span class="status-pill" :class="{ active: Boolean(stream) }">
             {{ stream ? '视觉上下文已开启' : '视觉上下文待启动' }}
@@ -33,7 +32,7 @@
         </div>
 
         <CameraPreview ref="cameraRef" :stream="stream" />
-
+<!--
         <div class="visual-context-strip" :class="{ active: Boolean(stream), preparing: isStarting }">
           <div class="visual-context-copy">
             <span class="visual-context-kicker">视觉上下文</span>
@@ -44,13 +43,13 @@
             {{ liveMode ? '打断播报' : '停止播报' }}
           </button>
         </div>
-
+-->
         <div v-if="liveMode" class="live-status-card" :class="liveStatus">
           <div class="live-status-main">
             <span class="live-dot" />
             <strong>{{ liveStatusText }}</strong>
           </div>
-          <p>{{ liveStatusHint }}</p>
+          <!--<p>{{ liveStatusHint }}</p>-->
         </div>
 
         <div v-if="mediaError" class="notice notice-warning">{{ mediaError }}</div>
@@ -64,7 +63,6 @@
         <div class="chat-header">
           <div>
             <span class="eyebrow">Conversation</span>
-            <h2>对话</h2>
           </div>
           <button class="link-button" :disabled="loading" @click="clearLocalConversation">清空</button>
         </div>
@@ -91,10 +89,6 @@
 
           <div v-else-if="!manualMode" class="live-entry-panel">
             <span class="eyebrow">Live Conversation</span>
-            <h3>开启实时对话</h3>
-            <p>
-              点击一次后就可以直接说话；系统会在你停顿约 1 秒后自动提交，并结合最近 15 秒画面回答。
-            </p>
             <div class="live-entry-actions">
               <button class="send-button live-entry-primary" :disabled="isStarting || loading" @click="startLiveConversation">
                 {{ isStarting ? '正在准备...' : '开始实时对话' }}
@@ -214,7 +208,7 @@ const messages = ref<ChatMessage[]>([
   {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '你可以直接像视频聊天一样问我。摄像头开启后，我会在本地保存最近 15 秒的轻量视觉帧；你每次提问时，我会把这些帧按时间顺序发给模型，由模型自行判断是否需要结合画面。'
+    content: '你可以直接像视频聊天一样问我'
   }
 ])
 const loading = ref(false)
@@ -260,7 +254,7 @@ const liveStatusText = computed(() => {
   }
 })
 
-const liveStatusHint = computed(() => {
+/**const liveStatusHint = computed(() => {
   switch (liveStatus.value) {
     case 'listening':
       return '说完一句后停顿约 1 秒，我会自动提交。'
@@ -274,6 +268,7 @@ const liveStatusHint = computed(() => {
       return '点击“开始实时对话”后，无需每次手动发送。'
   }
 })
+*/
 
 const liveTranscriptDisplay = computed(() => liveTranscript.value.trim())
 
