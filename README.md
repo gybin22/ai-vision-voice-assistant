@@ -1,6 +1,5 @@
 # AI 视觉语音对话助手
 
-视频地址：链接: https://pan.baidu.com/s/1IjtIQGAskixfG5CmOyekSQ?pwd=binn 提取码: binn
 
 一个基于 **Vue 3 + TypeScript + Vite + Spring Boot + MySQL 8** 的 AI 视频语音对话应用。用户可以通过浏览器摄像头和麦克风与 AI 进行接近视频通话式的交互：前端持续维护最近 15 秒视觉上下文，用户语音停顿后自动提交问题，后端调用多模态模型生成回答，并结合平台 Tokens 体系完成余额校验、用量扣减、成本核算和历史记录保存。
 
